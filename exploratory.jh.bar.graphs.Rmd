@@ -1,0 +1,281 @@
+---
+title: "Exploratory Bar Graphs - JHarte Client"
+author: "Sam Pritchard"
+date: "December 20, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(ggplot2)
+require(dplyr)
+require(lubridate)
+require(knitr)
+```
+
+
+
+```{r,echo=FALSE}
+
+# NEED TO MAKE IT YTD VS. YTD!!!!
+
+#data17 <- read.csv("data/Detailed Sales Report 17 full.csv", stringsAsFactors = FALSE)
+#data16 <- read.csv("data/Detailed Sales Report 16.csv", stringsAsFactors = FALSE)
+#data16 <- data16[,-c(18, 19, 21)]
+
+#data.clean <- rbind(data17, data16)
+#data.clean$Total.Sales <- as.numeric(data.clean$Total.Sales)
+#data.clean <- filter(data.clean, !is.na(Total.Sales)) #removes the sums that had $ signs in them
+#print(paste("sum of Total.Sales is", sum(data.clean$Total.Sales)))
+#data.clean$Date.Sold <- mdy_hm(data.clean$Date.Sold)
+#data.clean$Year <- year(data.clean$Date.Sold)
+#data.clean$Month <- month(data.clean$Date.Sold)
+#data.clean$Department <- trimws(data.clean$Department)
+#data.clean$Category <- trimws(data.clean$Category)
+#data.clean$Supplier <- trimws(data.clean$Supplier)
+#data.clean$Item <- trimws(data.clean$Item)
+#print(head(data.clean))
+#data.clean$Dept.By.Year <- paste(data.clean$Department, data.clean$Year)
+#data.clean$Categ.By.Year <- paste(data.clean$Category, data.clean$Year)
+
+import.jh.sql.connect <- function(db.name.in.sql.server){
+  library(odbc)
+  library(DBI)
+  
+  con <- DBI::dbConnect(odbc::odbc(),
+                        Driver = "SQL Server",
+                        Server = "LAPTOP-JHRVTF04\\SQLEXPRESS",
+                        Database = db.name.in.sql.server,
+                        Trusted_Connection = "True")
+  con
+}
+
+import.jh.detailed.sales <- function(){
+  joined.df <- DBI::dbGetQuery(con,'
+                                SELECT TransactionEntry.ItemID, TransactionEntry.Price, 
+                                 TransactionEntry.TransactionTime, TransactionEntry.Quantity, 
+                                  TransactionEntry.TransactionNumber, Item.Description, 
+                                 Department.Name AS "Department", Category.Name AS "Category", 
+                                 SupplierName AS "Supplier", Cashier.Name AS "CashierName", 
+                                 Register.Number AS "Register", Register.Description AS "RegLocation"
+
+                                 FROM TransactionEntry
+                                 
+                                 JOIN Item ON TransactionEntry.ItemID = Item.ID
+                                 JOIN Department ON Item.DepartmentID = Department.ID
+                                 JOIN Category ON Item.CategoryID = Category.ID
+                                 JOIN Supplier ON Item.SupplierID = Supplier.ID
+                                 JOIN [Transaction] ON TransactionEntry.TransactionNumber = [Transaction].TransactionNumber
+                                 JOIN Batch ON [Transaction].BatchNumber = Batch.BatchNumber
+                                 JOIN Register ON Batch.RegisterID = Register.ID
+                                 JOIN Cashier ON [Transaction].CashierID = Cashier.ID')
+  joined.df
+  }
+
+clean.jh.detailed.sales <- function(sql.df){
+  library(dplyr)
+  library(lubridate)
+    
+    sql.df <- sql.df %>%
+      rename(Sold.Price = Price, Cashier = CashierName, Date.Sold = TransactionTime,
+             Qty.Sold = Quantity, Transaction = TransactionNumber) %>%
+      mutate(Total.Sales = Qty.Sold*Sold.Price) %>%
+      select(Department, Category, Supplier, ItemID, Description, Qty.Sold, Sold.Price, 
+             Total.Sales, Transaction, Date.Sold, Register, Cashier)
+    
+    sql.df$Date.Sold <- ymd_hms(sql.df$Date.Sold)
+    sql.df$Year <- year(sql.df$Date.Sold)
+    sql.df$Month <- month(sql.df$Date.Sold)
+    sql.df$Department <- trimws(sql.df$Department)
+    sql.df$Category <- trimws(sql.df$Category)
+    sql.df$Supplier <- trimws(sql.df$Supplier)
+    sql.df$Item <- trimws(sql.df$Item)
+    #print(head(sql.df))
+    sql.df$Dept.By.Year <- paste(sql.df$Department, sql.df$Year)
+    sql.df$Categ.By.Year <- paste(sql.df$Category, sql.df$Year)
+    sql.df
+}
+
+con <- import.jh.sql.connect("Sam's Store")
+
+new.df <- import.jh.detailed.sales() # uses con but not as argument
+
+data.clean <- clean.jh.detailed.sales(new.df)
+
+
+dept.agg <- aggregate(Total.Sales ~ Dept.By.Year + Department + Categ.By.Year + Category + Year, data.clean, sum)
+```
+
+#SUPPLIERS
+Of 435 Suppliers the top 10% (44 of them) make up 55.1% of sales
+The top 20% (88 of them) make up 74.6% of sales
+30% makes up 85.3%
+40% makes up 92.2%
+50% makes up 96.4%
+
+In $ the bottom 25% brought in $10,671 in 2017, which is 109 suppliers
+```{r, echo=FALSE}
+data.clean.supplier <- data.clean
+data.clean.supplier$Supp.By.Year <- paste(data.clean.supplier$Supplier, data.clean.supplier$Year)
+supplier.agg <- aggregate(Total.Sales ~ Supp.By.Year + Supplier + Year, data.clean.supplier, sum)
+supplier.agg17 <- filter(supplier.agg, Year == 2017)
+supp17sum <- sum(supplier.agg17$Total.Sales)
+supplier.agg17 <- mutate(supplier.agg17, "Perc.Whole" = round((Total.Sales/supp17sum)*100, 1))
+supplier.agg17 <- arrange(supplier.agg17, desc(Total.Sales))
+print(head(supplier.agg17))
+print(nrow(supplier.agg17))
+kable(supplier.agg17)
+
+sum(supplier.agg17$Perc.Whole[1:44]) #10%
+
+sum(supplier.agg17$Perc.Whole[1:88]) #20%
+sum(supplier.agg17$Perc.Whole[1:132]) #30%
+sum(supplier.agg17$Perc.Whole[1:176]) #40%
+sum(supplier.agg17$Perc.Whole[1:218]) #50%
+
+sum(supplier.agg17$Perc.Whole[(435-44):435]) #bottom 10%
+sum(supplier.agg17$Perc.Whole[326:435]) #bottom 25%
+
+supplier.agg16 <- filter(supplier.agg, Year == 2016)
+sup.merge16 <- supplier.agg16[,c(2,4)]
+colnames(sup.merge16) <- c("Supplier", "2016")
+sup.merge17 <- supplier.agg17[,c(2,4)]
+colnames(sup.merge17) <- c("Supplier", "2017")
+sup.merge <- merge(sup.merge17, sup.merge16)
+sup.merge2 <- mutate(sup.merge, "Growth" = `2017` - `2016`, "Perc.Growth" = paste0(round((Growth/`2016`)*100,1),"%"))
+supplier.agg17 <- arrange(supplier.agg17, desc(Total.Sales))
+b25suppliers17 <- supplier.agg17[326:435,]
+b25growth <- filter(sup.merge2, Supplier %in% b25suppliers17$Supplier)
+
+b25growth <- arrange(b25growth, desc(`2017`))
+library(knitr)
+kable(b25growth)
+
+
+
+```
+
+## Bar Graphs Departments
+
+```{r, echo=FALSE}
+
+
+dept.bar <- ggplot(data = dept.agg, aes(Dept.By.Year)) +
+  geom_bar(aes(fill=Department, weight=Total.Sales)) + 
+  coord_flip() + theme(legend.position = "none")
+
+print(dept.bar)
+
+
+```
+
+## Remove Very Small Depts
+
+Removed the following categories: "POSTAGE", "MISCELLANEOUS PAPER", "MISCELLANEOUS", "GIFT CARD", "DISPLAY"
+
+```{r, echo=FALSE}
+small.depts <- c("POSTAGE", "MISCELLANEOUS PAPER", "MISCELLANEOUS", "GIFT CARD", "DISPLAY", "")
+
+dept.not.small.agg <- dept.agg[!(dept.agg$Department %in% small.depts),]
+
+dept.not.small.bar <- ggplot(data = dept.not.small.agg, aes(Dept.By.Year)) +
+  geom_bar(aes(fill=Department, weight=Total.Sales)) + 
+  coord_flip() + theme(legend.position = "none")
+
+print(dept.not.small.bar)
+```
+
+### Jewelry by Category
+
+Slight declines in most major categories but the one in bracelets is larger.  The declines follow the trend for the category
+
+```{r, echo=FALSE}
+
+#jewelry.agg <- filter(dept.not.small.agg, Department == "JEWELRY")
+cat.bar <- ggplot(data = dept.agg, aes(Categ.By.Year)) +
+  geom_bar(aes(fill=Category, weight=Total.Sales)) + 
+  coord_flip() + theme(legend.position = "none")
+
+print(cat.bar)
+
+
+```
+
+### General Merchandise by Category
+The Categories HOUSEWARES, CRAFTS, and ART GLASS were the highest for General Merchandise.  Housewares also grew substantially over last year, as did PERS ACCES/BAGS/POUCHES.
+
+As in some other categories, fewer items are uncategorized which may make growth look better than in really is in 2017.
+Best categories in ters
+
+```{r, echo=FALSE}
+
+gmerch.agg <- filter(dept.not.small.agg, Department == "GENERAL MERCHANDISE")
+gmerch.bar <- ggplot(data = gmerch.agg, aes(Categ.By.Year)) +
+  geom_bar(aes(fill=Category, weight=Total.Sales)) + 
+  coord_flip() + theme(legend.position = "none")
+
+print(gmerch.bar)
+
+
+```
+
+### Counter Card by Category
+
+BIRTHDAY is the largest category by far but saw a slight decline.
+
+The second highest is BLANK cards which also saw an increase in 2017
+
+```{r, echo=FALSE, fig.height=11}
+
+counterc.agg <- filter(dept.not.small.agg, Department == "COUNTER CARD")
+counterc.bar <- ggplot(data = counterc.agg, aes(Categ.By.Year)) +
+  geom_bar(aes(fill=Category, weight=Total.Sales)) + 
+  coord_flip() + theme(legend.position = "none")
+
+print(counterc.bar)
+
+
+```
+
+### Toys by Category
+
+IMAGINATIVE PLAY was the top toy category last year and it has continued to an even bigger year as top seller again in 2017. 
+
+PLUSH similarly was a really big seller last year (#2) and saw growth on top of that. 
+
+Other Categories with big growth were CREATIVE LEARNING, BABY, OUTDOOR FUN.
+
+Notable declines occurred in PUZZLES, PUPPETS, and FINGER PUPPETS
+
+Note that there were more uncategorized TOYS purchases in 2016, so that likely inflates some of the 2017 categories 
+
+```{r, echo=FALSE}
+
+toys.agg <- filter(dept.not.small.agg, Department == "TOYS")
+toys.bar <- ggplot(data = toys.agg, aes(Categ.By.Year)) +
+  geom_bar(aes(fill=Category, weight=Total.Sales)) + 
+  coord_flip() + theme(legend.position = "none")
+
+print(toys.bar)
+
+
+```
+
+
+### Books by Category
+
+TOY BOOK HARDBACK is the highest in the category and brings in roughly $80K per year
+
+```{r, echo=FALSE}
+
+books.agg <- filter(dept.not.small.agg, Department == "BOOKS")
+books.bar <- ggplot(data = books.agg, aes(Categ.By.Year)) +
+  geom_bar(aes(fill=Category, weight=Total.Sales)) + 
+  coord_flip() + theme(legend.position = "none")
+
+print(books.bar)
+
+
+```
