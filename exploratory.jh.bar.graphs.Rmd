@@ -19,6 +19,11 @@ require(knitr)
 
 ```{r,echo=FALSE}
 
+#####
+freemium.end.date <- as.Date("2017-12-31") ##### Date to end the data 
+#freemium.end.date <- 0
+#####
+
 # NEED TO MAKE IT YTD VS. YTD!!!!
 
 #data17 <- read.csv("data/Detailed Sales Report 17 full.csv", stringsAsFactors = FALSE)
@@ -103,7 +108,7 @@ con <- import.jh.sql.connect("Sam's Store")
 new.df <- import.jh.detailed.sales() # uses con but not as argument
 
 data.clean <- clean.jh.detailed.sales(new.df)
-
+data.clean <- filter(data.clean, Date.Sold <= freemium.end.date) ##### check
 
 dept.agg <- aggregate(Total.Sales ~ Dept.By.Year + Department + Categ.By.Year + Category + Year, data.clean, sum)
 ```

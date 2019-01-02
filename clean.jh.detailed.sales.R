@@ -21,5 +21,6 @@ clean.jh.detailed.sales <- function(sql.df){
     #print(head(sql.df))
     sql.df$Dept.By.Year <- paste(sql.df$Department, sql.df$Year)
     sql.df$Categ.By.Year <- paste(sql.df$Category, sql.df$Year)
+    sql.df <- arrange(sql.df, Date.Sold)
     sql.df
   }

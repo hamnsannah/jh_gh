@@ -1,4 +1,6 @@
+# must be already connected to database before using this function, probably with import.jh.connect.R
 
+#sample usage: detailed.sales.data <- import.jh.detailed.sales()
 
 import.jh.detailed.sales <- function(){
   joined.df <- DBI::dbGetQuery(con,'

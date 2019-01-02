@@ -1,5 +1,7 @@
 #establishes connection to any database imported into SQL Server.
 
+#sample usage: con <- import.jh.sql.connect("WHALESTALE")
+
 import.jh.sql.connect <- function(db.name.in.sql.server){
   library(odbc)
   library(DBI)
