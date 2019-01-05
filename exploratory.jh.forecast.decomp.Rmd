@@ -1,0 +1,143 @@
+---
+title: "Forecasts and Time Series Decompositions"
+author: "Allocate Analytics"
+date: "December 29, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# can add sugrrant for calendar view of hourly data since it's exploratory
+# weekly would also be helpful for inventory I suspect
+
+library(fpp2)
+
+# read in functions
+import.jh.sql.connect <- function(db.name.in.sql.server){
+  library(odbc)
+  library(DBI)
+  
+  con <- DBI::dbConnect(odbc::odbc(),
+                        Driver = "SQL Server",
+                        Server = "LAPTOP-JHRVTF04\\SQLEXPRESS",
+                        Database = db.name.in.sql.server,
+                        Trusted_Connection = "True")
+  con
+}
+
+import.jh.detailed.sales <- function(){
+  joined.df <- DBI::dbGetQuery(con,'
+                                SELECT TransactionEntry.ItemID, TransactionEntry.Price, 
+                                 TransactionEntry.TransactionTime, TransactionEntry.Quantity, 
+                                  TransactionEntry.TransactionNumber, Item.Description, 
+                                 Department.Name AS "Department", Category.Name AS "Category", 
+                                 SupplierName AS "Supplier", Cashier.Name AS "CashierName", 
+                                 Register.Number AS "Register", Register.Description AS "RegLocation"
+
+                                 FROM TransactionEntry
+                                 
+                                 JOIN Item ON TransactionEntry.ItemID = Item.ID
+                                 JOIN Department ON Item.DepartmentID = Department.ID
+                                 JOIN Category ON Item.CategoryID = Category.ID
+                                 JOIN Supplier ON Item.SupplierID = Supplier.ID
+                                 JOIN [Transaction] ON TransactionEntry.TransactionNumber = [Transaction].TransactionNumber
+                                 JOIN Batch ON [Transaction].BatchNumber = Batch.BatchNumber
+                                 JOIN Register ON Batch.RegisterID = Register.ID
+                                 JOIN Cashier ON [Transaction].CashierID = Cashier.ID')
+  joined.df
+}
+
+clean.jh.detailed.sales <- function(sql.df){
+  library(dplyr)
+  library(lubridate)
+    
+    sql.df <- sql.df %>%
+      rename(Sold.Price = Price, Cashier = CashierName, Date.Sold = TransactionTime,
+             Qty.Sold = Quantity, Transaction = TransactionNumber) %>%
+      mutate(Total.Sales = Qty.Sold*Sold.Price) %>%
+      select(Department, Category, Supplier, ItemID, Description, Qty.Sold, Sold.Price, 
+             Total.Sales, Transaction, Date.Sold, Register, Cashier)
+    
+    sql.df$Date.Sold <- ymd_hms(sql.df$Date.Sold)
+    sql.df$Year <- year(sql.df$Date.Sold)
+    sql.df$Month <- month(sql.df$Date.Sold)
+    sql.df$Department <- trimws(sql.df$Department)
+    sql.df$Category <- trimws(sql.df$Category)
+    sql.df$Supplier <- trimws(sql.df$Supplier)
+    sql.df$Item <- trimws(sql.df$Item)
+    #print(head(sql.df))
+    sql.df$Dept.By.Year <- paste(sql.df$Department, sql.df$Year)
+    sql.df$Categ.By.Year <- paste(sql.df$Category, sql.df$Year)
+    sql.df <- arrange(sql.df, Date.Sold)
+    sql.df
+  }
+
+exploratory.jh.time.series <- function(clean.df, freq = 365){
+  require(lubridate)
+  require(dplyr)
+  clean.df <- arrange(clean.df, Date.Sold)
+  clean.df$Day <- date(clean.df$Date.Sold) # df should have been arranged in cleaning step
+  start.year <- year(clean.df$Day)[1]
+  if(freq == 365){
+    start.day <- date(head(clean.df$Day,1)) - floor_date(head(clean.df$Day,1), unit = "year")+1 # subtracts earliest day from first day of year plus one
+    sales.agg <- aggregate(Total.Sales ~ Day, clean.df, sum)
+    all.dates <- seq.Date(from = as.Date(min(sales.agg$Day, na.rm = TRUE)), to = as.Date(max(sales.agg$Day, na.rm = TRUE)),by = 1)
+    sales.agg.all <- left_join(data.frame(Day = all.dates), sales.agg)
+    sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.day), frequency = 365)
+  }
+  if(freq == 12){
+    start.month <- month(head(clean.df$Month,1))
+    sales.agg <- aggregate(Total.Sales ~ Month + Year, clean.df, sum)
+    print(head(sales.agg, 25))
+    sales.agg.all <- left_join(sales.agg, data.frame(Month = 1:12))
+    sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.month), frequency = 12)
+  }
+  sales.ts[is.na(sales.ts)] <- 0
+  
+  sales.ts
+}
+
+# use functions
+
+con <- import.jh.sql.connect("WHALESTALE")
+
+sales.data <- import.jh.detailed.sales()
+
+sales.clean <- clean.jh.detailed.sales(sales.data)
+
+sales.ts <- exploratory.jh.time.series(sales.clean)
+```
+
+```{r autoplot, echo=FALSE}
+
+autoplot(sales.ts)
+
+```
+
+
+```{r decomp, echo=FALSE}
+
+sales.stl <- stl(sales.ts, s.window = 5)
+autoplot(sales.stl)
+autoplot(seasadj(sales.stl))
+```
+
+
+```{r forecast, echo=FALSE}
+#fit <- ets(sales.ts)
+sales.fc <- stlf(sales.ts)
+autoplot(sales.fc)
+```
+
+
+```{r, echo=FALSE}
+sales.ts <- exploratory.jh.time.series(sales.clean, freq = 12)
+autoplot(sales.ts)
+sales.stl <- stl(sales.ts, s.window = 5)
+autoplot(sales.stl)
+autoplot(seasadj(sales.stl))
+fit <- ets(sales.ts)
+sales.fc <- forecast(fit)
+autoplot(sales.fc)
+```
