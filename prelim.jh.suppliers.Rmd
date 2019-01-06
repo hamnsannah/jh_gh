@@ -7,15 +7,15 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-
 require(dplyr)
 require(ggplot2)
 require(lubridate)
 require(knitr)
+require(fpp2)
 
 #####
-#freemium.end.date <- as.Date("2017-12-31") ##### Date to end the data 
-freemium.end.date <- as.Date("2099-12-31") #### removes no dates but does remove NAs
+freemium.end.date <- as.Date("2017-12-31") ##### Date to end the data 
+#freemium.end.date <- as.Date("2099-12-31") #### removes no dates but does remove NAs
 #####
 
 import.jh.sql.connect <- function(db.name.in.sql.server){
@@ -29,7 +29,6 @@ import.jh.sql.connect <- function(db.name.in.sql.server){
                         Trusted_Connection = "True")
   con
 }
-
 import.jh.detailed.sales <- function(){
   joined.df <- DBI::dbGetQuery(con,'
                                 SELECT TransactionEntry.ItemID, TransactionEntry.Price, 
@@ -38,7 +37,6 @@ import.jh.detailed.sales <- function(){
                                  Department.Name AS "Department", Category.Name AS "Category", 
                                  SupplierName AS "Supplier", Cashier.Name AS "CashierName", 
                                  Register.Number AS "Register", Register.Description AS "RegLocation"
-
                                  FROM TransactionEntry
                                  
                                  JOIN Item ON TransactionEntry.ItemID = Item.ID
@@ -51,7 +49,6 @@ import.jh.detailed.sales <- function(){
                                  JOIN Cashier ON [Transaction].CashierID = Cashier.ID')
   joined.df
   }
-
 clean.jh.detailed.sales <- function(sql.df){
   library(dplyr)
   library(lubridate)
@@ -77,40 +74,22 @@ clean.jh.detailed.sales <- function(sql.df){
 }
 
 con <- import.jh.sql.connect("Sam's Store")
-
 new.df <- import.jh.detailed.sales() # uses con but not as argument
-
 data.clean <- clean.jh.detailed.sales(new.df)
 data.clean <- filter(data.clean, Date.Sold <= freemium.end.date) ##### check
 
-#data17 <- read.csv("Detailed Sales Report 17.csv", stringsAsFactors = FALSE)
-#data16 <- read.csv("Detailed Sales Report 16.csv", stringsAsFactors = FALSE)
-
-#data.both <- rbind(data17, data16)
-#data.both$Total.Sales <- as.numeric(data.both$Total.Sales)
-#data.both <- filter(data.both, !is.na(Total.Sales)) #removes the sums that had $ signs in them
-#print(paste("sum of Total.Sales is", sum(data.both$Total.Sales)))
-#data.both$Date.Sold <- mdy_hm(data.both$Date.Sold)
-#data.both$Year <- year(data.both$Date.Sold)
-#data.both$Month <- month(data.both$Date.Sold)
-#data.both$Department <- trimws(data.both$Department)
-#data.both$Category <- trimws(data.both$Category)
-#data.both$Supplier <- trimws(data.both$Supplier)
-#data.both$Item <- trimws(data.both$Item)
-#print(head(data.both))
-##data.both$Dept.By.Year <- paste(data.both$Department, data.both$Year)
-#data.both$Categ.By.Year <- paste(data.both$Category, data.both$Year)
-
 data.both <- data.clean
-dept.agg <- aggregate(Total.Sales ~ Dept.By.Year + Department + Categ.By.Year + Category + Year, data.both, sum)
+#dept.agg <- aggregate(Total.Sales ~ Dept.By.Year + Department + Categ.By.Year + Category + Year, data.both, sum)
 
 data.both.supplier <- data.both
 data.both.supplier$Supp.By.Year <- paste(data.both.supplier$Supplier, data.both.supplier$Year)
 supplier.agg <- aggregate(Total.Sales ~ Supp.By.Year + Supplier + Year, data.both.supplier, sum)
-supplier.agg17 <- filter(supplier.agg, Year == 2017)
-supp17sum <- sum(supplier.agg17$Total.Sales)
-supplier.agg17 <- mutate(supplier.agg17, "Perc.Whole" = round((Total.Sales/supp17sum)*100, 2))
-supplier.agg17 <- arrange(supplier.agg17, desc(Total.Sales))
+cy <- year(freemium.end.date)
+py <- year(freemium.end.date)-1
+supplier.agg.cy <- filter(supplier.agg, Year == cy)
+supp.cy.sum <- sum(supplier.agg.cy$Total.Sales)
+supplier.agg.cy <- mutate(supplier.agg.cy, "Perc.Whole" = round((Total.Sales/supp.cy.sum)*100, 2))
+supplier.agg.cy <- arrange(supplier.agg.cy, desc(Total.Sales))
 
 prod.uniq <- length(unique(data.both$ItemID))
 cat.uniq <- length(unique(data.both$Category))
@@ -144,7 +123,7 @@ Gives a list along with growth '17 vs. '16
 
 # Concentration of Sales By Supplier
 
-For the selected time period there were `r prod.uniq` products sold in `r cat.uniq` categories across `r dept.uniq` departments from `r nrow(supplier.agg17)` different suppliers.
+For the selected time period there were `r prod.uniq` products sold in `r cat.uniq` categories across `r dept.uniq` departments from `r nrow(supplier.agg.cy)` different suppliers.
 
 ### Old:
 Of 435 Suppliers the top 10% (44 of them) make up 55.1% of sales
@@ -162,35 +141,21 @@ This chart can be read starting on the x axis at the bottom "The top 25% of supp
 
 ```{r, echo=FALSE}
 
-#print(head(supplier.agg17, 50))
-
-#sum(supplier.agg17$Perc.Whole[1:44]) #10%
-
-#sum(supplier.agg17$Perc.Whole[1:88]) #20%
-#sum(supplier.agg17$Perc.Whole[1:132]) #30%
-#sum(supplier.agg17$Perc.Whole[1:176]) #40%
-#sum(supplier.agg17$Perc.Whole[1:218]) #50%
-
-#sum(supplier.agg17$Perc.Whole[(435-44):435]) #bottom 10%
-#sum(supplier.agg17$Perc.Whole[326:435]) #bottom 25%
-#summary(cars)
-
 #create data frame with columns 
       #1) Top Percentage of all suppliers in increments of 1% 
       #2) Total sales at each increment 
       #3) Total units (rows in detailed sales report) at each increment 
       #4) Number of items associated with those suppliers (at least those sold)
-
 # begin with data by suppliers showing Total.Sales, Items, units sold
 increment.rows <- data.frame()
 perc.inc.df <- for(h in 1:100){
-  one.to.h.sum <- sum(supplier.agg17$Total.Sales[1:((h/100)*nrow(supplier.agg17))])
-  row.h <- c(h, round(nrow(supplier.agg17)*(h/100)), one.to.h.sum)
+  one.to.h.sum <- sum(supplier.agg.cy$Total.Sales[1:((h/100)*nrow(supplier.agg.cy))])
+  row.h <- c(h, round(nrow(supplier.agg.cy)*(h/100)), one.to.h.sum)
   #print(row.h)
   increment.rows <- rbind(increment.rows, row.h)
 }
-print("here's increment.rows")
-print(head(increment.rows))
+#print("here's increment.rows")
+#print(head(increment.rows))
 
 colnames(increment.rows) <- c("Perc. of LARGEST Suppliers", "Number of Suppliers", "Sales")
 increment.rows <- mutate(increment.rows, "Perc. of Sales" = (increment.rows[,3]/tail(increment.rows[,3],1))*100)
@@ -198,20 +163,19 @@ increment.rows <- mutate(increment.rows, "Perc. of Sales" = (increment.rows[,3]/
 #decile.rows
 decile.rows <- data.frame()
 h.by.tens <- seq(from = 10, to = 100, by = 10)
-print(h.by.tens)
+#print(h.by.tens)
 perc.inc.df <- for(h in h.by.tens){
-  one.to.h.sum <- sum(supplier.agg17$Total.Sales[1:((h/100)*nrow(supplier.agg17))])
-  row.h <- c(h, round(nrow(supplier.agg17)*(h/100)), one.to.h.sum)
+  one.to.h.sum <- sum(supplier.agg.cy$Total.Sales[1:((h/100)*nrow(supplier.agg.cy))])
+  row.h <- c(h, round(nrow(supplier.agg.cy)*(h/100)), one.to.h.sum)
   #print(row.h)
   decile.rows <- rbind(decile.rows, row.h)
 }
+
 colnames(decile.rows) <- c("Perc. of LARGEST Suppliers", "Number of Suppliers", "Sales")
 decile.rows <- mutate(decile.rows, "Perc. of Sales" = (decile.rows[,3]/tail(decile.rows[,3],1))*100)
-
 #print("here's decile.rows")
 #print(head(decile.rows))
 #print(str(decile.rows))
-
 #supp.conc <- ggplot(increment.rows, aes(x=`Perc. of LARGEST Suppliers`, y=Sales, group= 1)) +
 #  geom_line(size=2, color="blue")
 
@@ -223,13 +187,10 @@ supp.conc.bars <- ggplot(decile.rows, aes(x=`Perc. of LARGEST Suppliers`, y=Sale
   guides(fill = FALSE)
 
 print(supp.conc.bars)
-
-
 decile.rows$Sales <- paste0("$",prettyNum(round(decile.rows$Sales), big.mark = ","))
 decile.rows$`Perc. of LARGEST Suppliers` <- paste0(decile.rows$`Perc. of LARGEST Suppliers`, "%")
 decile.rows$`Perc. of Sales` <- paste0(round(decile.rows$`Perc. of Sales`, 1), "%")
 decile.rows$`Number of Suppliers` <- as.character(decile.rows$`Number of Suppliers`)
-
 inline1 <- decile.rows[1,1]
 inline2 <- decile.rows[1,2]
 inline3 <- decile.rows[1,3]
@@ -241,12 +202,7 @@ inline4 <- decile.rows[1,4]
 This table can be read as "the top `r inline1` percent of suppliers measured by dollars, which is `r inline2` supplier, brought in `r inline3` in sales, which is `r inline4` of all sales for the business in 2017"
 
 ```{r, echo=FALSE}
-
 kable(decile.rows)
-
-
-
-
 increment.rows$Sales <- paste0("$",prettyNum(round(increment.rows$Sales), big.mark = ","))
 increment.rows$`Perc. of LARGEST Suppliers` <- paste0(increment.rows$`Perc. of LARGEST Suppliers`, "%")
 increment.rows$`Perc. of Sales` <- paste0(round(increment.rows$`Perc. of Sales`, 1), "%")
@@ -261,28 +217,27 @@ increment.rows$`Number of Suppliers` <- as.character(increment.rows$`Number of S
 Over half of all sales in 2017 YTD came from these 44 Suppliers
 
 ```{r, echo=FALSE}
-supplier.agg16 <- filter(supplier.agg, Year == 2016)
-sup.merge16 <- supplier.agg16[,c(2,4)]
-colnames(sup.merge16) <- c("Supplier", "2016")
-sup.merge <- merge(supplier.agg17, sup.merge16, by.x="Supplier", all.x=TRUE, all.y=FALSE)
-sup.merge <- mutate(sup.merge, "Growth" = Total.Sales - `2016`, "Perc.Growth" = paste0(round((Growth/`2016`)*100,1),"%")) %>%
+supplier.agg.py <- filter(supplier.agg, Year == py)
+sup.merge.py <- supplier.agg.py[,c(2,4)]
+colnames(sup.merge.py) <- c("Supplier", "Prior Yr")
+sup.merge <- merge(supplier.agg.cy, sup.merge.py, by.x="Supplier", all.x=TRUE, all.y=FALSE)
+sup.merge <- mutate(sup.merge, "Growth" = Total.Sales - `Prior Yr`, "Perc.Growth" = 
+                      paste0(round((Growth/`Prior Yr`)*100,1),"%")) %>%
   arrange(desc(Total.Sales)) %>%
   select(1,4:8)
-colnames(sup.merge)[c(2,4)] <- c("Sales.2017", "Sales.2016")
+colnames(sup.merge)[c(2,4)] <- c("Sales Current Yr", "Sales Prior Yr")
 sup.merge[is.na(sup.merge)] <- 0
-supplier.agg17.pretty <- sup.merge 
-supplier.agg17.pretty$Perc.Whole <- paste0(supplier.agg17.pretty$Perc.Whole, "%")
-supplier.agg17.pretty$Growth <- paste0("$",prettyNum(round(supplier.agg17.pretty$Growth), big.mark = ","))
-supplier.agg17.pretty$Sales.2016 <- paste0("$",prettyNum(round(supplier.agg17.pretty$Sales.2016), big.mark = ","))
-supplier.agg17.pretty$Sales.2017 <- paste0("$",prettyNum(round(supplier.agg17.pretty$Sales.2017), big.mark = ",")) ## Switch back
-
-if(nrow(supplier.agg17.pretty) < 25){
-  kable.suppliers <- supplier.agg17.pretty
+supplier.agg.cy.pretty <- sup.merge 
+supplier.agg.cy.pretty$Perc.Whole <- paste0(supplier.agg.cy.pretty$Perc.Whole, "%")
+supplier.agg.cy.pretty$Growth <- paste0("$",prettyNum(round(supplier.agg.cy.pretty$Growth), big.mark = ","))
+supplier.agg.cy.pretty$`Sales Prior Yr` <- paste0("$",prettyNum(round(supplier.agg.cy.pretty$`Sales Prior Yr`), big.mark = ","))
+supplier.agg.cy.pretty$`Sales Current Yr` <- paste0("$",prettyNum(round(supplier.agg.cy.pretty$`Sales Current Yr`), big.mark = ",")) ## Switch back
+if(nrow(supplier.agg.cy.pretty) < 25){
+  kable.suppliers <- supplier.agg.cy.pretty
 } else {
-  kable.suppliers <- supplier.agg17.pretty[1:25,]
+  kable.suppliers <- supplier.agg.cy.pretty[1:25,]
 }
 kable(kable.suppliers)
-
 ```
 
 ## Chart of Sales by SMALLEST X% of Suppliers
@@ -290,21 +245,47 @@ kable(kable.suppliers)
 This chart is the opposite of the one above.  It can be read starting at the axis on the bottom "The smallest 25% of all suppliers accounted for almost nothing, and the bottom 50% account for something less than $100K"
 
 ```{r, echo=FALSE}
-supplier.agg17.bottom <- arrange(supplier.agg17, Total.Sales)
+supplier.agg.cy.bottom <- arrange(supplier.agg.cy, Total.Sales)
 increment.rows.b <- data.frame()
 perc.inc.df <- for(h in 1:100){
-  one.to.h.sum <- sum(supplier.agg17.bottom$Total.Sales[1:((h/100)*nrow(supplier.agg17.bottom))])
-  row.h <- c(h, round(nrow(supplier.agg17.bottom)*(h/100)), one.to.h.sum)
+  one.to.h.sum <- sum(supplier.agg.cy.bottom$Total.Sales[1:((h/100)*nrow(supplier.agg.cy.bottom))])
+  row.h <- c(h, round(nrow(supplier.agg.cy.bottom)*(h/100)), one.to.h.sum)
   #print(row.h)
   increment.rows.b <- rbind(increment.rows.b, row.h)
 }
 colnames(increment.rows.b) <- c("Perc. of SMALLEST Suppliers", "Number of Suppliers", "Sales")
 increment.rows.b <- mutate(increment.rows.b, "Perc. of Sales" = (increment.rows.b[,3]/tail(increment.rows.b[,3],1))*100)
 
+
+
 supp.conc.b <- ggplot(increment.rows.b, aes(x=`Perc. of SMALLEST Suppliers`, y=Sales, group= 1)) +
   geom_line(size=2, color="blue")
-print(supp.conc.b)
+#print(supp.conc.b)
 
+###create decile.rows.b ###
+supplier.agg.cy.b <- arrange(supplier.agg.cy, Total.Sales) #b is for bottom, these are the lowest performing ones
+decile.rows.b <- data.frame()
+h.by.tens <- seq(from = 10, to = 100, by = 10)
+#print(h.by.tens)
+perc.inc.df <- for(h in h.by.tens){
+  one.to.h.sum <- sum(supplier.agg.cy.b$Total.Sales[1:((h/100)*nrow(supplier.agg.cy.b))])
+  row.h <- c(h, round(nrow(supplier.agg.cy.b)*(h/100)), one.to.h.sum)
+  #print(row.h)
+  decile.rows.b <- rbind(decile.rows.b, row.h)
+}
+
+colnames(decile.rows.b) <- c("Perc. of LARGEST Suppliers", "Number of Suppliers", "Sales")
+decile.rows.b <- mutate(decile.rows.b, "Perc. of Sales" = (decile.rows.b[,3]/tail(decile.rows.b[,3],1))*100)
+
+#new one with bars
+supp.conc.bars.b <- ggplot(decile.rows.b, aes(x=`Perc. of LARGEST Suppliers`, y=Sales, group= 1, fill = Sales)) +
+  geom_bar(stat = "identity") + theme_dark() +
+  scale_fill_distiller(palette = "Blues", direction = 1) +
+  scale_y_continuous(labels = scales::dollar) + 
+  scale_x_continuous(breaks = seq(from = 10, to = 100, by = 10), labels = paste0(h.by.tens, "%")) +
+  guides(fill = FALSE)
+
+print(supp.conc.bars.b)
 ```
 
 ## Table of Sales by SMALLEST X% of Suppliers
@@ -317,7 +298,6 @@ increment.rows.b$`Perc. of SMALLEST Suppliers` <- paste0(increment.rows.b$`Perc.
 increment.rows.b$`Perc. of Sales` <- paste0(round(increment.rows.b$`Perc. of Sales`, 2), "%")
 increment.rows.b$`Number of Suppliers` <- as.character(increment.rows.b$`Number of Suppliers`)
 kable(increment.rows.b)
-
 ```
 
 ## Who are the SMALLEST 25% of Suppliers?
@@ -327,21 +307,64 @@ Only $10,197 came from these 109 Suppliers all year, which is 0.48% of 2017 sale
 Of these 109 suppliers, only 16 of them begin with a Z denoting a past supplier.
 
 ```{r, echo=FALSE}
-supplier.agg16 <- filter(supplier.agg, Year == 2016)
-sup.merge16 <- supplier.agg16[,c(2,4)]
-colnames(sup.merge16) <- c("Supplier", "2016")
-sup.merge <- merge(supplier.agg17.bottom, sup.merge16, by.x="Supplier", all.x=TRUE, all.y=FALSE)
-sup.merge <- mutate(sup.merge, "Growth" = Total.Sales - `2016`, "Perc.Growth" = paste0(round((Growth/`2016`)*100,1),"%")) %>%
-  arrange(Total.Sales) %>%
-  select(1,4:8)
-colnames(sup.merge)[c(2,4)] <- c("Sales.2017", "Sales.2016")
+#supplier.agg.py <- filter(supplier.agg, Year == 2016)
+#sup.merge.py <- supplier.agg.py[,c(2,4)]
+#colnames(sup.merge.py) <- c("Supplier", "2016")
+#sup.merge <- merge(supplier.agg.cy.bottom, sup.merge.py, by.x="Supplier", all.x=TRUE, all.y=FALSE)
+#sup.merge <- mutate(sup.merge, "Growth" = Total.Sales - `2016`, "Perc.Growth" = #paste0(round((Growth/`2016`)*100,1),"%")) %>%
+#  arrange(Total.Sales) %>%
+#  select(1,4:8)
+#colnames(sup.merge)[c(2,4)] <- c("Sales Current Yr", "Sales Prior Yr")
 
-supplier.agg17.pretty.b <-  sup.merge   #supplier.agg17.bottom
-supplier.agg17.pretty.b$Perc.Whole <- paste0(supplier.agg17.pretty.b$Perc.Whole, "%")
-supplier.agg17.pretty.b$Sales.2017 <-paste0("$",prettyNum(round(supplier.agg17.pretty.b$Sales.2017), big.mark = ","))
-supplier.agg17.pretty.b$Sales.2016 <-paste0("$",prettyNum(round(supplier.agg17.pretty.b$Sales.2016), big.mark = ","))
-supplier.agg17.pretty.b$Growth <-paste0("$",prettyNum(round(supplier.agg17.pretty.b$Growth), big.mark = ","))
-kable(supplier.agg17.pretty.b[1:109,])
+sup.merge <- arrange(sup.merge, `Sales Current Yr`)
+supplier.agg.cy.pretty.b <-  sup.merge   #supplier.agg.cy.bottom
+supplier.agg.cy.pretty.b$Perc.Whole <- paste0(supplier.agg.cy.pretty.b$Perc.Whole, "%")
+supplier.agg.cy.pretty.b$`Sales Current Yr` <-paste0("$",prettyNum(round(supplier.agg.cy.pretty.b$`Sales Current Yr`), big.mark = ","))
+supplier.agg.cy.pretty.b$`Sales Prior Yr` <-paste0("$",prettyNum(round(supplier.agg.cy.pretty.b$`Sales Prior Yr`), big.mark = ","))
+supplier.agg.cy.pretty.b$Growth <-paste0("$",prettyNum(round(supplier.agg.cy.pretty.b$Growth), big.mark = ","))
+kable(supplier.agg.cy.pretty.b[1:109,])
 
+####
+# for inline in next title
+top.sup1 <- supplier.agg.cy$Supplier[1]
 ```
 
+\newpage
+
+## Chart of Monthly Sales for `r top.sup1`
+```{r, timeseries, echo=FALSE, message=FALSE, warning=FALSE}
+
+exploratory.jh.time.series <- function(clean.df, freq = 365){
+  require(lubridate)
+  require(dplyr)
+  clean.df <- arrange(clean.df, Date.Sold)
+  clean.df$Day <- date(clean.df$Date.Sold) # df should have been arranged in cleaning step
+  start.year <- year(clean.df$Day)[1]
+  if(freq == 365){
+    start.day <- date(head(clean.df$Day,1)) - floor_date(head(clean.df$Day,1), unit = "year")+1 # subtracts earliest day from first day of year plus one
+    sales.agg <- aggregate(Total.Sales ~ Day, clean.df, sum)
+    all.dates <- seq.Date(from = as.Date(min(sales.agg$Day, na.rm = TRUE)), to = as.Date(max(sales.agg$Day, na.rm = TRUE)),by = 1)
+    sales.agg.all <- left_join(data.frame(Day = all.dates), sales.agg)
+    sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.day), frequency = 365)
+  }
+  if(freq == 12){
+    start.month <- month(head(clean.df$Month,1))
+    sales.agg <- aggregate(Total.Sales ~ Month + Year, clean.df, sum)
+    #print(head(sales.agg, 25))
+    sales.agg.all <- left_join(sales.agg, data.frame(Month = 1:12))
+    sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.month), frequency = 12)
+  }
+  sales.ts[is.na(sales.ts)] <- 0
+  
+  sales.ts
+}
+
+sup1.df <- data.clean[data.clean$Supplier == supplier.agg.cy$Supplier[1],]
+
+sup1.ts <- exploratory.jh.time.series(sup1.df, freq = 12)
+
+autoplot(sup1.ts) + theme_dark() + geom_line(color = "#a3bfed", size = 4)
+#sup1.tsdf <- as.data.frame(sup1.ts)
+#print(head(sup1.tsdf))
+#sup1.plot <- ggplot(data = sup1.ts, aes(x = Date, y = Sales)) + geom_line()
+#print(sup1.plot)
