@@ -334,6 +334,8 @@ top.sup1 <- supplier.agg.cy$Supplier[1]
 ## Chart of Monthly Sales for `r top.sup1`
 ```{r, timeseries, echo=FALSE, message=FALSE, warning=FALSE}
 
+
+
 exploratory.jh.time.series <- function(clean.df, freq = 365){
   require(lubridate)
   require(dplyr)
