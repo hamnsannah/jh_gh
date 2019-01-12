@@ -14,7 +14,7 @@ require(knitr)
 require(fpp2)
 
 #####
-freemium.end.date <- as.Date("2017-12-31") ##### Date to end the data 
+freemium.end.date <- as.Date("2018-06-30") ##### Date to end the data 
 #freemium.end.date <- as.Date("2099-12-31") #### removes no dates but does remove NAs
 #####
 
@@ -334,12 +334,14 @@ kable(supplier.agg.cy.pretty.b[1:109,])
 ####
 # for inline in next title
 top.sup1 <- supplier.agg.cy$Supplier[1]
+top.sup2 <- supplier.agg.cy$Supplier[2]
+top.sup3 <- supplier.agg.cy$Supplier[3]
 ```
 
 \newpage
 
-## Chart of Monthly Sales for `r top.sup1`
-```{r, timeseries, echo=FALSE, message=FALSE, warning=FALSE}
+## Chart of Monthly Sales for `r top.sup1` - #1 Supplier for Selected Time
+```{r, sup1, echo=FALSE, message=FALSE, warning=FALSE}
 
 
 
@@ -426,12 +428,49 @@ exploratory.top.three.prod.ts <- function(supplier.filter, df.to.use){
   
   joint.ts <- ts.union(prod1.ts, prod2.ts, prod3.ts)
   colnames(joint.ts) <- top.prods
+  #joint.length <- nrow(joint.ts)
+  #print(joint.length)
+  #label.vec <- seq(from = "1", to = joint.length, by = 3)
+  #print(label.vec)
+  
+  #create labels and breaks
+  df.to.use <- arrange(df.to.use, Date.Sold)
+  df.to.use <- df.to.use[!is.na(df.to.use$Date.Sold),]
+  df.to.use$Day <- date(df.to.use$Date.Sold)
+  start.year <- year(df.to.use$Day)[1]
+  end.year <- year(df.to.use$Day[length(df.to.use$Day)])
 
   autoplot(joint.ts) +
-theme_dark() + theme(legend.position = "top") + geom_line(size = 2) + scale_color_brewer() #+ scale_x_continuous(breaks = round(joint.length/4), labels = joint.labels)
+theme_dark() + theme(legend.position = "top") + geom_line(size = 2) + scale_color_brewer() + 
+    scale_x_continuous(breaks = seq(from = start.year, to = end.year, by = 1))
   #joint.df <- data.frame(Y=as.matrix(joint.ts), date=time(joint.ts))
   #ggplot(data = joint.df, aes(x = data))
 
 }
 
 exploratory.top.three.prod.ts(top.sup1, data.clean)
+
+```
+
+## Chart of Monthly Sales for `r top.sup2` - #2 Supplier for Selected Time
+```{r, sup2, echo=FALSE, message=FALSE, warning=FALSE}
+
+sup2.df <- data.clean[data.clean$Supplier == supplier.agg.cy$Supplier[2],]
+
+sup2.ts <- exploratory.jh.time.series(sup2.df, freq = 12)
+
+autoplot(sup2.ts) + theme_dark() + geom_line(color = "#a3bfed", size = 4)
+
+exploratory.top.three.prod.ts(top.sup2, data.clean)
+```
+
+## Chart of Monthly Sales for `r top.sup3` - #3 Supplier for Selected Time
+```{r, sup3, echo=FALSE, message=FALSE, warning=FALSE}
+
+sup3.df <- data.clean[data.clean$Supplier == supplier.agg.cy$Supplier[3],]
+
+sup3.ts <- exploratory.jh.time.series(sup3.df, freq = 12)
+
+autoplot(sup3.ts) + theme_dark() + geom_line(color = "#a3bfed", size = 4)
+
+exploratory.top.three.prod.ts(top.sup3, data.clean)
