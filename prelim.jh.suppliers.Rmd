@@ -18,6 +18,10 @@ freemium.end.date <- as.Date("2017-12-31") ##### Date to end the data
 #freemium.end.date <- as.Date("2099-12-31") #### removes no dates but does remove NAs
 #####
 
+if(file.exists(paste0("data/sales.data.cache", Sys.Date(), ".csv"))){
+  data.clean <- read.csv(paste0("data/sales.data.cache", Sys.Date(), ".csv"), stringsAsFactor = FALSE)
+} else {
+  
 import.jh.sql.connect <- function(db.name.in.sql.server){
   library(odbc)
   library(DBI)
@@ -76,8 +80,11 @@ clean.jh.detailed.sales <- function(sql.df){
 con <- import.jh.sql.connect("Sam's Store")
 new.df <- import.jh.detailed.sales() # uses con but not as argument
 data.clean <- clean.jh.detailed.sales(new.df)
-data.clean <- filter(data.clean, Date.Sold <= freemium.end.date) ##### check
 
+write.csv(data.clean, paste0("data/sales.data.cache", Sys.Date(), ".csv"), row.names = FALSE)
+}
+
+data.clean <- filter(data.clean, Date.Sold <= freemium.end.date) ##### check
 data.both <- data.clean
 #dept.agg <- aggregate(Total.Sales ~ Dept.By.Year + Department + Categ.By.Year + Category + Year, data.both, sum)
 
@@ -419,7 +426,12 @@ exploratory.top.three.prod.ts <- function(supplier.filter, df.to.use){
   
   joint.ts <- ts.union(prod1.ts, prod2.ts, prod3.ts)
   colnames(joint.ts) <- top.prods
-  autoplot(joint.ts)
+
+  autoplot(joint.ts) +
+theme_dark() + theme(legend.position = "top") + geom_line(size = 2) + scale_color_brewer() #+ scale_x_continuous(breaks = round(joint.length/4), labels = joint.labels)
+  #joint.df <- data.frame(Y=as.matrix(joint.ts), date=time(joint.ts))
+  #ggplot(data = joint.df, aes(x = data))
+
 }
 
 exploratory.top.three.prod.ts(top.sup1, data.clean)
