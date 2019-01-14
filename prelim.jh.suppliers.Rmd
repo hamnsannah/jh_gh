@@ -13,11 +13,19 @@ require(lubridate)
 require(knitr)
 require(fpp2)
 
+#contents 2019
+
+#1 Autoplot of data for selected time period to show time period and a great viz out of the gate
+#2 text info about the products and the suppliers broken down
+
+#3 Text about the 80-20 rule - which suppliers' products generating the most sales and the least
+
 #####
-freemium.end.date <- as.Date("2018-06-30") ##### Date to end the data 
+freemium.end.date <- as.Date("2018-12-31") ##### Date to end the data 
 #freemium.end.date <- as.Date("2099-12-31") #### removes no dates but does remove NAs
 #####
 
+#next if-else
 if(file.exists(paste0("data/sales.data.cache", Sys.Date(), ".csv"))){
   data.clean <- read.csv(paste0("data/sales.data.cache", Sys.Date(), ".csv"), stringsAsFactor = FALSE)
 } else {
@@ -77,11 +85,39 @@ clean.jh.detailed.sales <- function(sql.df){
     sql.df
 }
 
+
+
 con <- import.jh.sql.connect("Sam's Store")
 new.df <- import.jh.detailed.sales() # uses con but not as argument
 data.clean <- clean.jh.detailed.sales(new.df)
 
 write.csv(data.clean, paste0("data/sales.data.cache", Sys.Date(), ".csv"), row.names = FALSE)
+}
+
+#read in another function independent of caching
+exploratory.jh.time.series <- function(clean.df, freq = 365){
+  require(lubridate)
+  require(dplyr)
+  clean.df <- arrange(clean.df, Date.Sold)
+  clean.df$Day <- date(clean.df$Date.Sold) # df should have been arranged in cleaning step
+  start.year <- year(clean.df$Day)[1]
+  if(freq == 365){
+    start.day <- date(head(clean.df$Day,1)) - floor_date(head(clean.df$Day,1), unit = "year")+1 # subtracts earliest day from first day of year plus one
+    sales.agg <- aggregate(Total.Sales ~ Day, clean.df, sum)
+    all.dates <- seq.Date(from = as.Date(min(sales.agg$Day, na.rm = TRUE)), to = as.Date(max(sales.agg$Day, na.rm = TRUE)),by = 1)
+    sales.agg.all <- left_join(data.frame(Day = all.dates), sales.agg)
+    sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.day), frequency = 365)
+  }
+  if(freq == 12){
+    start.month <- month(head(clean.df$Month,1))
+    sales.agg <- aggregate(Total.Sales ~ Month + Year, clean.df, sum)
+    #print(head(sales.agg, 25))
+    sales.agg.all <- left_join(sales.agg, data.frame(Month = 1:12))
+    sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.month), frequency = 12)
+  }
+  sales.ts[is.na(sales.ts)] <- 0
+  
+  sales.ts
 }
 
 data.clean <- filter(data.clean, Date.Sold <= freemium.end.date) ##### check
@@ -127,6 +163,135 @@ Same data as #5 but in table form
 
 ### 7. Who are the SMALLEST 25% of Suppliers?
 Gives a list along with growth '17 vs. '16
+
+
+
+# Sales Over Time for All Suppliers
+
+```{r, allin, echo = FALSE, warning=FALSE, message=FALSE, fig.height=4}
+allin.agg <- aggregate(Total.Sales ~ Year, supplier.agg, sum)
+
+#####just a test
+#allin.agg <- filter(allin.agg, Year >= 2018)
+
+#####
+years.incl <- unique(allin.agg$Year)  # important because picking color palettes manually for lines
+
+#all.bar <- ggplot(data = allin.agg, aes(y = Total.Sales, x = factor(Year), fill = factor(Year))) + 
+#  geom_bar(stat = "identity") + scale_y_continuous(labels = scales::dollar) + 
+#  scale_fill_brewer(palette = "RdBu") + theme_dark()+ 
+#  labs(x = "Year", y = "Sales", title = "Total Sales from All Suppliers by Year") + theme(legend.position="none")
+
+
+all.ts <- exploratory.jh.time.series(data.clean, freq = 12)
+
+if(length(years.incl) == 1){
+
+  man.pal <- c("#67a9cf") #manual palette
+  
+  all.bar <- ggplot(data = allin.agg, aes(y = Total.Sales, x = factor(Year), fill = factor(Year))) + 
+  geom_bar(stat = "identity") + scale_y_continuous(labels = scales::dollar) + 
+  scale_fill_manual(name = "Year", values = man.pal) + theme_dark()+
+  labs(x = "Year", y = "Sales", title = "Total Sales from All Suppliers by Year") + theme(legend.position="none")
+
+year1.ts <- all.ts
+
+all.line <- autoplot(all.ts) + autolayer(year1.ts, color = man.pal[1], size = 3) + theme_dark()
+
+}
+
+if(length(years.incl) == 2){
+
+  man.pal <- c("#f7f7f7", "#67a9cf") #manual palette
+  
+  all.bar <- ggplot(data = allin.agg, aes(y = Total.Sales, x = factor(Year), fill = factor(Year))) + 
+  geom_bar(stat = "identity") + scale_y_continuous(labels = scales::dollar) + 
+  scale_fill_manual(name = "Year", values = man.pal) + theme_dark()+
+  labs(x = "Year", y = "Sales", title = "Total Sales from All Suppliers by Year") + theme(legend.position="none")
+
+
+year1.ts <- window(all.ts, end = c(years.incl[2],1))
+year2.ts <- window(all.ts, start = c(years.incl[2],1))
+all.line <- autoplot(all.ts) + autolayer(year1.ts, color = man.pal[1], size = 3) + 
+  autolayer(year2.ts, color = man.pal[2], size = 3) + theme_dark()
+}
+
+if(length(years.incl) == 3){
+
+all.bar <- ggplot(data = allin.agg, aes(y = Total.Sales, x = factor(Year), fill = factor(Year))) + 
+  geom_bar(stat = "identity") + scale_y_continuous(labels = scales::dollar) + 
+  scale_fill_brewer(name = "Year", palette = "RdBu") + theme_dark()+
+  labs(x = "Year", y = "Sales", title = "Total Sales from All Suppliers by Year") + theme(legend.position="none")
+
+man.pal <- c("#ef8a62", "#f7f7f7", "#67a9cf") #manual palette
+year1.ts <- window(all.ts, end = c(years.incl[2],1))
+year2.ts <- window(all.ts, start = c(years.incl[2],1), end = c(years.incl[3],1))
+year3.ts <- window(all.ts, start = c(years.incl[3],1))
+
+all.line <- autoplot(all.ts) + autolayer(year1.ts, color = man.pal[1], size = 3) + 
+  autolayer(year2.ts, color = man.pal[2], size = 3) + 
+  autolayer(year3.ts, color = man.pal[3], size = 3) + theme_dark()
+
+}
+
+if(length(years.incl) == 4){
+#c(#ca0020, #f4a582, #92c5de, #0571b0)
+  
+  all.bar <- ggplot(data = allin.agg, aes(y = Total.Sales, x = factor(Year), fill = factor(Year))) + 
+  geom_bar(stat = "identity") + scale_y_continuous(labels = scales::dollar) + 
+  scale_fill_brewer(name = "Year", palette = "RdBu") + theme_dark()+
+  labs(x = "Year", y = "Sales", title = "Total Sales from All Suppliers by Year") + theme(legend.position="none")
+
+man.pal <- c("#ca0020", "#f4a582", "#92c5de", "#0571b0") #manual palette
+year1.ts <- window(all.ts, end = c(years.incl[2],1))
+year2.ts <- window(all.ts, start = c(years.incl[2],1), end = c(years.incl[3],1))
+year3.ts <- window(all.ts, start = c(years.incl[3],1), end = c(years.incl[4],1))
+year4.ts <- window(all.ts, start = c(years.incl[4],1))
+
+all.line <- autoplot(all.ts) + autolayer(year1.ts, color = man.pal[1], size = 3) + 
+  autolayer(year2.ts, color = man.pal[2], size = 3) + 
+  autolayer(year3.ts, color = man.pal[3], size = 3) + 
+  autolayer(year4.ts, color = man.pal[4], size = 3) + theme_dark()
+}
+
+if(length(years.incl) == 5){
+#c(#ca0020, #f4a582, #f7f7f7, #92c5de, #0571b0)
+  
+  all.bar <- ggplot(data = allin.agg, aes(y = Total.Sales, x = factor(Year), fill = factor(Year))) + 
+  geom_bar(stat = "identity") + scale_y_continuous(labels = scales::dollar) + 
+  scale_fill_brewer(name = "Year", palette = "RdBu") + theme_dark()+
+  labs(x = "Year", y = "Sales", title = "Total Sales from All Suppliers by Year") + theme(legend.position="none")
+
+man.pal <- c("#ca0020", "#f4a582", "#f7f7f7","#92c5de", "#0571b0") #manual palette
+year1.ts <- window(all.ts, end = c(years.incl[2],1))
+year2.ts <- window(all.ts, start = c(years.incl[2],1), end = c(years.incl[3],1))
+year3.ts <- window(all.ts, start = c(years.incl[3],1), end = c(years.incl[4],1))
+year4.ts <- window(all.ts, start = c(years.incl[4],1), end = c(years.incl[5],1))
+year5.ts <- window(all.ts, start = c(years.incl[5],1))
+
+all.line <- autoplot(all.ts) + autolayer(year1.ts, color = man.pal[1], size = 3) + 
+  autolayer(year2.ts, color = man.pal[2], size = 3) + 
+  autolayer(year3.ts, color = man.pal[3], size = 3) + 
+  autolayer(year4.ts, color = man.pal[4], size = 3) +
+  autolayer(year5.ts, color = man.pal[5], size = 3) + theme_dark()
+}
+
+
+#ef8a62
+#f7f7f7
+#67a9cf
+
+#ca0020
+#f4a582
+#92c5de
+#0571b0
+
+#autoplot(all.ts) + theme_dark() + geom_line(aes(color = Year), size = 4) + scale_color_brewer(palette = "RdBu")
+
+print(all.bar)
+print(all.line)
+
+```
 
 # Concentration of Sales By Supplier
 
@@ -223,7 +388,7 @@ increment.rows$`Number of Suppliers` <- as.character(increment.rows$`Number of S
 
 Over half of all sales in 2017 YTD came from these 44 Suppliers
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, fig.height=6}
 supplier.agg.py <- filter(supplier.agg, Year == py)
 sup.merge.py <- supplier.agg.py[,c(2,4)]
 colnames(sup.merge.py) <- c("Supplier", "Prior Yr")
@@ -234,6 +399,18 @@ sup.merge <- mutate(sup.merge, "Growth" = Total.Sales - `Prior Yr`, "Perc.Growth
   select(1,4:8)
 colnames(sup.merge)[c(2,4)] <- c("Sales Current Yr", "Sales Prior Yr")
 sup.merge[is.na(sup.merge)] <- 0
+
+### sup.yy here
+sup.top10.cy.vec <- unique(sup.merge$Supplier)[1:10]
+supplier.agg.10 <- supplier.agg[supplier.agg$Supplier %in% unique(sup.merge$Supplier)[1:10],]
+#print(sup.top10.cy.vec)
+g <- ggplot(data = supplier.agg.10, aes(x = Supp.By.Year, fill = factor(Year))) + 
+  geom_bar(stat = "identity", aes(y = Total.Sales)) + coord_flip() +
+  scale_y_continuous(labels = scales::dollar) +
+  scale_fill_brewer(direction = 1, palette = "RdBu", name = "Year") + theme_dark() + 
+  labs(title = "Sales From Top 10 Suppliers By Year", y = "Total Sales", x = "Suppler By Year") 
+print(g)
+
 supplier.agg.cy.pretty <- sup.merge 
 supplier.agg.cy.pretty$Perc.Whole <- paste0(supplier.agg.cy.pretty$Perc.Whole, "%")
 supplier.agg.cy.pretty$Growth <- paste0("$",prettyNum(round(supplier.agg.cy.pretty$Growth), big.mark = ","))
@@ -347,30 +524,7 @@ top.sup3 <- supplier.agg.cy$Supplier[3]
 
 
 
-exploratory.jh.time.series <- function(clean.df, freq = 365){
-  require(lubridate)
-  require(dplyr)
-  clean.df <- arrange(clean.df, Date.Sold)
-  clean.df$Day <- date(clean.df$Date.Sold) # df should have been arranged in cleaning step
-  start.year <- year(clean.df$Day)[1]
-  if(freq == 365){
-    start.day <- date(head(clean.df$Day,1)) - floor_date(head(clean.df$Day,1), unit = "year")+1 # subtracts earliest day from first day of year plus one
-    sales.agg <- aggregate(Total.Sales ~ Day, clean.df, sum)
-    all.dates <- seq.Date(from = as.Date(min(sales.agg$Day, na.rm = TRUE)), to = as.Date(max(sales.agg$Day, na.rm = TRUE)),by = 1)
-    sales.agg.all <- left_join(data.frame(Day = all.dates), sales.agg)
-    sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.day), frequency = 365)
-  }
-  if(freq == 12){
-    start.month <- month(head(clean.df$Month,1))
-    sales.agg <- aggregate(Total.Sales ~ Month + Year, clean.df, sum)
-    #print(head(sales.agg, 25))
-    sales.agg.all <- left_join(sales.agg, data.frame(Month = 1:12))
-    sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.month), frequency = 12)
-  }
-  sales.ts[is.na(sales.ts)] <- 0
-  
-  sales.ts
-}
+
 
 sup1.df <- data.clean[data.clean$Supplier == supplier.agg.cy$Supplier[1],]
 
@@ -441,7 +595,7 @@ exploratory.top.three.prod.ts <- function(supplier.filter, df.to.use){
   end.year <- year(df.to.use$Day[length(df.to.use$Day)])
 
   autoplot(joint.ts) +
-theme_dark() + theme(legend.position = "top") + geom_line(size = 2) + scale_color_brewer() + 
+theme_dark() + theme(legend.position = "top") + geom_line(size = 2) + scale_color_brewer(direction = -1) + 
     scale_x_continuous(breaks = seq(from = start.year, to = end.year, by = 1))
   #joint.df <- data.frame(Y=as.matrix(joint.ts), date=time(joint.ts))
   #ggplot(data = joint.df, aes(x = data))
