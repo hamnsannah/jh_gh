@@ -1,6 +1,6 @@
 ---
 title: "Supplier Snapshot - Whale's Tale"
-author: "JHarte & Associates + Allocate Analytics"
+author: "Allocate Analytics"
 date: "January 15, 2019"
 output: pdf_document
 ---
@@ -85,7 +85,7 @@ clean.jh.detailed.sales <- function(sql.df){
     sql.df
 }
 
-con <- import.jh.sql.connect("Sam's Store")
+con <- import.jh.sql.connect("WHALESTALE")
 new.df <- import.jh.detailed.sales() # uses con but not as argument
 data.clean <- clean.jh.detailed.sales(new.df)
 
@@ -432,7 +432,7 @@ print(supp.conc.bars.b)
 
 ## Table of Sales by SMALLEST X% of Suppliers for `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`
 
-This table contains the same data as the chart above in a different format. It can be read starting at the axis on the bottom "The smallest `r inline50.1` of all suppliers, which is `r inline50.2` suppliers, accounted for `r inline50.3` in sales, which is `r inline50.4` of the whole business."
+This table contains the same data as the chart above in a different format. It can be read "The smallest `r inline50.1` of all suppliers, which is `r inline50.2` suppliers, accounted for `r inline50.3` in sales, which is `r inline50.4` of the whole business."
 
 ```{r, echo=FALSE}
 kable(decile.rows.b)
