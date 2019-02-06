@@ -1,7 +1,7 @@
 ---
-title: "Supplier Snapshot - Whale's Tale"
-author: "Allocate Analytics"
-date: "January 15, 2019"
+title: "Supplier Snapshot - Sample Store"
+author: "JHarte & Associates + Allocate Analytics"
+date: "February 6, 2019"
 output: pdf_document
 ---
 
@@ -26,8 +26,8 @@ freemium.end.date <- as.Date("2018-12-31") ##### Date to end the data
 #####
 
 #next if-else
-if(file.exists(paste0("data/sales.data.cache", Sys.Date(), ".csv"))){
-  data.clean <- read.csv(paste0("data/sales.data.cache", Sys.Date(), ".csv"), stringsAsFactor = FALSE)
+if(file.exists(paste0("data/anon.sales", Sys.Date(), ".csv"))){ #change back to "data/sales.data.cache" in this line and next
+  data.clean <- read.csv(paste0("data/anon.sales", Sys.Date(), ".csv"), stringsAsFactor = FALSE)
 } else {
   
 import.jh.sql.connect <- function(db.name.in.sql.server){
@@ -399,11 +399,11 @@ perc.inc.df <- for(h in h.by.tens){
   decile.rows.b <- rbind(decile.rows.b, row.h)
 }
 
-colnames(decile.rows.b) <- c("Perc. of LARGEST Suppliers", "Number of Suppliers", "Sales")
+colnames(decile.rows.b) <- c("Perc. of SMALLEST Suppliers", "Number of Suppliers", "Sales")
 decile.rows.b <- mutate(decile.rows.b, "Perc. of Sales" = (decile.rows.b[,3]/tail(decile.rows.b[,3],1))*100)
 
 #new one with bars
-supp.conc.bars.b <- ggplot(decile.rows.b, aes(x=`Perc. of LARGEST Suppliers`, y=Sales, group= 1, fill = Sales)) +
+supp.conc.bars.b <- ggplot(decile.rows.b, aes(x=`Perc. of SMALLEST Suppliers`, y=Sales, group= 1, fill = Sales)) +
   geom_bar(stat = "identity") + theme_dark() +
   scale_fill_distiller(palette = "Blues", direction = 1) +
   scale_y_continuous(labels = scales::dollar) + 
@@ -411,7 +411,7 @@ supp.conc.bars.b <- ggplot(decile.rows.b, aes(x=`Perc. of LARGEST Suppliers`, y=
   guides(fill = FALSE) + labs(x = "Perc. of SMALLEST Suppliers")
 
 decile.rows.b$Sales <- paste0("$",prettyNum(round(decile.rows.b$Sales), big.mark = ","))
-decile.rows.b$`Perc. of LARGEST Suppliers` <- paste0(decile.rows.b$`Perc. of LARGEST Suppliers`, "%")
+decile.rows.b$`Perc. of SMALLEST Suppliers` <- paste0(decile.rows.b$`Perc. of SMALLEST Suppliers`, "%")
 decile.rows.b$`Perc. of Sales` <- paste0(round(decile.rows.b$`Perc. of Sales`, 1), "%")
 decile.rows.b$`Number of Suppliers` <- as.character(decile.rows.b$`Number of Suppliers`)
 inline50.1 <- decile.rows.b[5,1]
