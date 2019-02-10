@@ -1,25 +1,21 @@
 ---
-title: "Staffing Analysis"
+title: "Staffing Analysis - Sample Store"
 author: "Allocate Analytics"
-date: "March 16, 2018"
+date: "February 9, 2019"
 output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-#pretty close but somewhere the data is getting dropped.  What's getting to ggplot is missing data.  Use print to evaluate.  Watch aggregate()
-
-
 library(dplyr)
 library(ggplot2)
 library(sugrrants)
 library(lubridate)
+library(fpp2)
 #library(prophet)
 
 #data.clean <- read.csv("data/mutated.data1417.csv", stringsAsFactors = FALSE)
-
-
 
 #####
 import.jh.sql.connect <- function(db.name.in.sql.server){
@@ -79,12 +75,17 @@ clean.jh.detailed.sales <- function(sql.df){
     sql.df$Categ.By.Year <- paste(sql.df$Category, sql.df$Year)
     sql.df
 }
-
+if(file.exists(paste0("data/sales.data.cache", Sys.Date(), ".csv"))){
+  data.clean <- read.csv(paste0("data/sales.data.cache", Sys.Date(), ".csv"), stringsAsFactor = FALSE)
+} else {
 con <- import.jh.sql.connect("Sam's Store")
 
 new.df <- import.jh.detailed.sales() # uses con but not as argument
 
 data.clean <- clean.jh.detailed.sales(new.df)
+
+write.csv(data.clean, paste0("data/sales.data.cache", Sys.Date(), ".csv"), row.names = FALSE)
+}
 
 #####
 #data.clean <- filter(data.clean, Register != "9")
@@ -108,58 +109,12 @@ data17.plot <- data17.agg %>%
 
 ```
 
-## 2018 Calendar Plot
+### Staffing Based on Sales in Recent Months
+######Note: The calculations for the yellow dots are placeholders.  More information is needed before creating staffing projections from sales.  However, the blue areas and red line are based on real data.  The blue areas represent sales for that hour 50% of the time, 75%, and 95%.  The red is the mean or average. 
 
-```{r, calendar.18.plot, echo=FALSE}
-data18 <- filter(data.wide, Year == 2018)
-#print(str(data17))
-#print(head(data17))
+```{r off.peak.minimum, echo=FALSE, warning=FALSE, message=FALSE}
 
-data18.agg <- aggregate(Total.Sales ~ Date.Sold.Round + Date.Sold, data18, sum)
-data18.agg <- data18.agg %>%
-  mutate("Hour" = as.integer(hour(Date.Sold.Round))) %>%
-  frame_calendar(x = Hour, y = Total.Sales, date = Date.Sold, calendar = "monthly")
-data18.plot <- data18.agg %>%
-  ggplot(aes(x = .Hour, y = .Total.Sales, group = Date.Sold)) + geom_line()
-prettify(data18.plot)
-```
-
-## 2017 Calendar Plot
-
-```{r calendar.17.plot, echo=FALSE}
-print(unique(data.clean$Register))
-prettify(data17.plot)
-```
-
-## Comments and Trends
-
-1 Almost no big days until 2nd weekend of April and hen it's Fri, Sat, Sun
-2 Weekdays start getting consistently big after Memorial Day
-3 Weekdays slow down after Labor Day
-4 October weekdays even slower than Sept.
-5 Beginning around Halloween Saturday is really the main big weekend day until the week before Xmas and except for Thanksgiving weekend
-
-## 2016 Calendar Plot
-
-```{r calendar.16.plot, echo=FALSE}
-data16 <- filter(data.wide, Year == 2016)
-
-data16.agg <- aggregate(Total.Sales ~ Date.Sold.Round + Date.Sold, data16, sum)
-data16.agg <- data16.agg %>%
-  mutate("Hour" = as.integer(hour(Date.Sold.Round))) %>%
-  frame_calendar(x = Hour, y = Total.Sales, date = Date.Sold, calendar = "monthly")
-data16.plot <- data16.agg %>%
-  ggplot(aes(x = .Hour, y = .Total.Sales, group = Date.Sold)) + geom_line()
-prettify(data16.plot)
-
-```
-
-
-### Off Peak Minimum Staffing
-
-```{r off.peak.minimum, echo=FALSE}
-
-data2years.wide <- filter(data.wide, Year %in% c(2016, 2017))
+data2years.wide <- filter(data.wide, Year %in% c(2017, 2018))
 
 #data2years$Date.Sold <- as_date(data2years$Date.Sold)
 
@@ -167,16 +122,17 @@ data2years.wide <- data2years.wide %>%
   mutate("Hour" = hour(Date.Sold.Round)) %>%
   mutate("Weekday" = wday((Date.Sold.Round)))
     
-# filter for off.peak.minimum ##
+# filter for recent months since July ##
 df1 <- data2years.wide %>%
-  filter(Date.Sold >= "2016-01-01", Date.Sold <= "2016-01-31")
-df2 <- data2years.wide %>%
-  filter(Date.Sold >= "2016-02-01", Date.Sold <= "2016-04-07", Weekday %in% c(1, 2, 3, 4, 5, 7))
+  filter(Date.Sold >= "2018-07-01", Date.Sold <= "2018-12-17")
+#df2 <- data2years.wide %>%
+#  filter(Date.Sold >= "2016-02-01", Date.Sold <= "2016-04-07", Weekday %in% c(1, 2, 3, 4, 5, 7))
 
-print(head(df2))
-print(tail(df2))
+#print(head(df2))
+#print(tail(df2))
 
-df.all <- rbind(df1, df2)
+df.all <- df1
+#df.all <- rbind(df1, df2)
 
 # need to go back to original script and add additional start dates with defaults like 0 for min and 100000 for max
 staffing.day.plot.2 <- function(df, nickname.of.time.range){
@@ -224,65 +180,180 @@ staffing.day.plot.2 <- function(df, nickname.of.time.range){
 #staffing.day.plot.2(df.all)
 
 
+### function with staffing plot with yellow dots
+staffing.day.plot.dots <- function(df, nickname.of.time.range){
+  
+  library(lubridate)
+  library(dplyr)
+  library(ggplot2)
+  
+  df.agg <- aggregate(Total.Sales ~ Date.Sold.Round + Hour + Weekday, df.all, sum)
+  conf.df <- data.frame()
+  
+  for(i in 9:23){
+    #print(i)
+    i.hour.vec <- df.agg %>%
+      filter(Hour == i) %>%
+      select(Total.Sales)
+    #i.hour.vec <- as.double(i.hour.vec)
+    #print(head(i.hour.vec))
+    #i.estimate.95 <- t.test(i.hour.vec, conf.level = 0.95)$estimate
+    #i.conf.int.95 <- t.test(i.hour.vec, conf.level = 0.95)$conf.int
+    #i.conf.int.75 <- t.test(i.hour.vec, conf.level = 0.75)$conf.int
+    #i.conf.int.50 <- t.test(i.hour.vec, conf.level = 0.50)$conf.int
+    #three.conf.int <- c(i, i.estimate.95, i.conf.int.95, i.conf.int.75, i.conf.int.50)
+    quantiles <- quantile(as.numeric(unlist(i.hour.vec)), probs = c(.5, .025, .975, .125, .875, .25, .75))
+    #print(class(quantiles))
+    
+    quantiles.hour <- c(i, quantiles)
+    #print(class(quantiles.hour))
+    conf.df <- rbind(conf.df, quantiles.hour)
+    
+    #i.estimate.95 <- quantie(i.hour.vec, .5)
+    #i.conf.int.95.high <- 
+    #quantiles.hour <- c(i, quantile(i.hour.vec, c(.5, .025, .975, .125, .875, .25, .75)))
+  }
+  colnames(conf.df) <- c("hour", "estimate", "low95", "high95", "low75", "high75", "low50", "high50")
+  
+  # add column corresponding to # of staff needed based on $400 -> 2, $600 -> 3, etc
+  conf.df$staff.estimate <- (round(conf.df$high50/100)) ###### should be /200 for Whale's Tale
+  
+  lbls = paste0(as.character(c(seq(9, 12, 1), seq(1, 11, 1))), c(rep("am", 3), rep("pm", 12)))
+  brks <- seq(9,23, 1)
+  
+  lbls.y = paste0("$", seq(0, 2000, 200))
+  brks.y = seq(0, 2000, 200)
+  brks.y2 = seq(0,8,1)
+  
+  ########
+  #####change all these 100s to 200s if doing Whale's Tale, really need a way to isolate this equation in order to make changes easily
+  ########
+  
+  day.plot <- ggplot(data = conf.df, aes(x=hour)) +
+    geom_ribbon(aes(ymin=low95, ymax=high95), fill="#0571b0", alpha = .75)+
+    geom_ribbon(aes(ymin=low75, ymax=high75), fill="#92c5de", alpha = .75)+
+    geom_ribbon(aes(ymin=low50, ymax=high50), fill="#d1e5f0", alpha = .75)+
+    geom_ribbon(aes(ymin=estimate-5, ymax=estimate+5), fill="#ef8a62") +
+    geom_point(aes(y=staff.estimate*100), color="#FFFF33", size = 10) +
+    geom_text(aes(y = staff.estimate*100, label = staff.estimate), color = "black", size = 5, fontface = "bold")
+  day.plot <- day.plot + scale_x_continuous(labels = lbls, breaks = brks) + 
+    scale_y_continuous(sec.axis = sec_axis(~./100, name = "Estimate of Hourly Staff Need", breaks = brks.y2), labels = lbls.y, breaks = brks.y, name = "Range of Hourly Sales") + theme_dark() #+ ylim(0,2000)
+  #print(head(conf.df, 15))
+  print(day.plot)
+}
+
 ```
 
-```{r peak.6.days, echo=FALSE}
+```{r peak.6.days, echo=FALSE, warning=FALSE, message=FALSE}
 
 # filter for off.peak.minimum ##
-df1 <- data2years.wide %>%
-  filter(Date.Sold >= "2016-06-25", Date.Sold <= "2016-09-03", Weekday %in% c(1, 2, 3, 4, 5, 6))
-df2 <- data2years.wide %>%
-  filter(Date.Sold >= "2017-06-25", Date.Sold <= "2017-09-03", Weekday %in% c(1, 2, 3, 4, 5, 6))
+#df1 <- data2years.wide %>%
+#  filter(Date.Sold >= "2016-06-25", Date.Sold <= "2016-09-03", Weekday %in% c(1, 2, 3, 4, 5, 6))
+#df2 <- data2years.wide %>%
+#  filter(Date.Sold >= "2017-06-25", Date.Sold <= "2017-09-03", Weekday %in% c(1, 2, 3, 4, 5, 6))
 
 #print(head(df2))
 #print(tail(df2))
 
-df.all <- rbind(df1, df2)
-staffing.day.plot.2(df.all)
+df.all <- df1
+#df.all <- rbind(df1, df2)
+staffing.day.plot.dots(df.all)
 
+```
+Notes:
+
+* This chart is meant to answer the question how many staff are needed at the different points of the day.  The main assumption here is that more sales mean more customers present, which requires more staff to support them.
+
+* The red area shows the average sales level for each hour for every sales day from July 1, 2018 to Dec 17, 2018.
+
+* The blue areas show more information about the range of possibility....
+
+\newpage
+# Appendix: 
+##Additional graphs used to determine how to group days together, determine seasonality, and delineate beginning and end of data set
+
+## 2018 Calendar Plot
+
+```{r, calendar.18.plot, echo=FALSE}
+data18 <- filter(data.wide, Year == 2018)
+#print(str(data17))
+#print(head(data17))
+
+data18.agg <- aggregate(Total.Sales ~ Date.Sold.Round + Date.Sold, data18, sum)
+data18.agg <- data18.agg %>%
+  mutate("Hour" = as.integer(hour(Date.Sold.Round))) %>%
+  frame_calendar(x = Hour, y = Total.Sales, date = Date.Sold, calendar = "monthly")
+data18.plot <- data18.agg %>%
+  ggplot(aes(x = .Hour, y = .Total.Sales, group = Date.Sold)) + geom_line()
+prettify(data18.plot)
+```
+
+\newpage
+## 2017 Calendar Plot
+
+```{r calendar.17.plot, echo=FALSE, warning=FALSE, message=FALSE}
+#print(unique(data.clean$Register))
+prettify(data17.plot)
+```
+
+\newpage
+## 2016 Calendar Plot
+
+```{r calendar.16.plot, echo=FALSE, warning=FALSE, message=FALSE}
+data16 <- filter(data.wide, Year == 2016)
+
+data16.agg <- aggregate(Total.Sales ~ Date.Sold.Round + Date.Sold, data16, sum)
+data16.agg <- data16.agg %>%
+  mutate("Hour" = as.integer(hour(Date.Sold.Round))) %>%
+  frame_calendar(x = Hour, y = Total.Sales, date = Date.Sold, calendar = "monthly")
+data16.plot <- data16.agg %>%
+  ggplot(aes(x = .Hour, y = .Total.Sales, group = Date.Sold)) + geom_line()
+prettify(data16.plot)
 
 ```
 
+\newpage
+### Evaluating Seasonality and Trend: Monthly Data
 
-### Prophet Trends
+```{r time_series, echo = FALSE, warning=FALSE, message=FALSE}
 
+exploratory.jh.time.series <- function(clean.df, freq = 365){
+  require(lubridate)
+  require(dplyr)
+  clean.df <- arrange(clean.df, Date.Sold)
+  clean.df$Day <- date(clean.df$Date.Sold) # df should have been arranged in cleaning step
+  start.year <- year(clean.df$Day)[1]
+  if(freq == 365){
+    start.day <- date(head(clean.df$Day,1)) - floor_date(head(clean.df$Day,1), unit = "year")+1 # subtracts earliest day from first day of year plus one
+    sales.agg <- aggregate(Total.Sales ~ Day, clean.df, sum)
+    all.dates <- seq.Date(from = as.Date(min(sales.agg$Day, na.rm = TRUE)), to = as.Date(max(sales.agg$Day, na.rm = TRUE)),by = 1)
+    sales.agg.all <- left_join(data.frame(Day = all.dates), sales.agg)
+    sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.day), frequency = 365)
+  }
+  if(freq == 12){
+    start.month <- month(head(clean.df$Month,1))
+    sales.agg <- aggregate(Total.Sales ~ Month + Year, clean.df, sum)
+    #print(head(sales.agg, 25))
+    sales.agg.all <- left_join(sales.agg, data.frame(Month = 1:12))
+    sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.month), frequency = 12)
+  }
+  sales.ts[is.na(sales.ts)] <- 0
+  
+  sales.ts
+}
 
-```{r, echo=FALSE}
-
-#require(prophet)
-
-#data1617 <- rbind(data16, data17) #filter(data.clean, Year %in% c(2016, 2017))
-#data1617.peak <- filter(data1617, Month %in% c(6, 7, 8))
-#data1617.agg <- aggregate(Total.Sales ~ Date.Sold.Round, data1617.peak, sum)
-#print(head(data1617.agg, 100))
-#colnames(data1617.agg) <- c("ds", "y")
-#model <- prophet(data1617.agg, yearly.seasonality = TRUE, daily.seasonality = TRUE)
-#future <- make_future_dataframe(model, periods = 365)
-#forecast <- predict(model, future)
-#prophet.plot.obj <- prophet_plot_components(model, forecast)
-#print(prophet.plot.obj[[4]])
-
-#data.date.agg <- aggregate(Total.Sales ~ Date + Supplier, data.both, sum)
-#colnames(data.date.agg) <- c("ds", "Supplier", "y")
-#prophet.data <- filter(data.date.agg, Supplier == supplier.name)
-#print(head(prophet.data, 10))
-#prophet.data <- select(prophet.data, ds, y)
-#model <- prophet(prophet.data, yearly.seasonality = TRUE)
-#future <- make_future_dataframe(model, periods = 365)
-#forecast <- predict(model, future)
-#prophet.plot.obj <- prophet_plot_components(model, forecast)
-#print(prophet.plot.obj)
-
-
+sales.ts <- exploratory.jh.time.series(data.clean, freq = 12)
+autoplot(sales.ts)
+sales.stl <- stl(sales.ts, s.window = 5)
+autoplot(sales.stl)
 ```
 
+\newpage
+### Evaluating Seasonality and Trend: Daily Data
 
-
-
-```{r, echo=FALSE}
-
-# write a script that will compute in table and plot the shape of the day with uncertainty included
-
-
-
-
+```{r time_series_daily, echo=FALSE, warning=FALSE, message=FALSE}
+sales.ts <- exploratory.jh.time.series(data.clean)
+autoplot(sales.ts)
+sales.stl <- stl(sales.ts, s.window = 5)
+autoplot(sales.stl)
+```

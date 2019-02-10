@@ -100,7 +100,7 @@ exploratory.jh.time.series <- function(clean.df, freq = 365){
 
 # use functions
 
-con <- import.jh.sql.connect("WHALESTALE")
+con <- import.jh.sql.connect("Sam's Store")
 
 sales.data <- import.jh.detailed.sales()
 
