@@ -110,7 +110,7 @@ data17.plot <- data17.agg %>%
 ```
 
 ### Staffing Based on Sales in Recent Months
-######Note: The calculations for the yellow dots are placeholders.  More information is needed before creating staffing projections from sales.  However, the blue areas and red line are based on real data.  The blue areas represent sales for that hour 50% of the time, 75%, and 95%.  The red is the mean or average. 
+######Note: The calculations for the yellow dots are placeholders.  More information is needed before creating actual staffing projections from sales for this store.  However, the blue areas and red line are based on real data.  The lightest blue area represents a range that sales fall within for that hour 50% of the time.  The slightly darker blue represents the 75% range, and the darkest blue represents 95%.  The red is the mean or average sales level for that hour for the selected time period. 
 
 ```{r off.peak.minimum, echo=FALSE, warning=FALSE, message=FALSE}
 
@@ -190,7 +190,7 @@ staffing.day.plot.dots <- function(df, nickname.of.time.range){
   df.agg <- aggregate(Total.Sales ~ Date.Sold.Round + Hour + Weekday, df.all, sum)
   conf.df <- data.frame()
   
-  for(i in 9:23){
+  for(i in 8:23){
     #print(i)
     i.hour.vec <- df.agg %>%
       filter(Hour == i) %>%
@@ -218,8 +218,8 @@ staffing.day.plot.dots <- function(df, nickname.of.time.range){
   # add column corresponding to # of staff needed based on $400 -> 2, $600 -> 3, etc
   conf.df$staff.estimate <- (round(conf.df$high50/100)) ###### should be /200 for Whale's Tale
   
-  lbls = paste0(as.character(c(seq(9, 12, 1), seq(1, 11, 1))), c(rep("am", 3), rep("pm", 12)))
-  brks <- seq(9,23, 1)
+  lbls = paste0(as.character(c(seq(8, 12, 1), seq(1, 11, 1))), c(rep("am", 4), rep("pm", 12)))
+  brks <- seq(8,23, 1)
   
   lbls.y = paste0("$", seq(0, 2000, 200))
   brks.y = seq(0, 2000, 200)
@@ -262,11 +262,13 @@ staffing.day.plot.dots(df.all)
 ```
 Notes:
 
-* This chart is meant to answer the question how many staff are needed at the different points of the day.  The main assumption here is that more sales mean more customers present, which requires more staff to support them.
+* This chart is meant to answer the question how many staff are needed at the different points of the day.  The main assumption here is that more sales mean more customers present, which requires more staff to support them.  For this particular data set, we need more info on current staffing levels such as least number of employees to keep the store open, max number scheduled, etc.
 
-* The red area shows the average sales level for each hour for every sales day from July 1, 2018 to Dec 17, 2018.
+* As shown in the Appendix below, the sales for this store don't exhibit a very seasonal pattern, so there's not a need for a plot with February sales data as distinct from a plot with January data.  However, there has been a significant upward trend in 2018.  In light of that, I included data from July 1, 2018 to Dec 17, 2018, which is the latest date for which I have full data.  The red area shows the average sales level for each hour for every day during taht period.
 
-* The blue areas show more information about the range of possibility....
+* This report isn't meant to suggest managers should schedule people for 1 hour shifts or follow these levels exactly.  This report shows how many staff are likely to be required at a particular time.  It's management's discretion how best to use this to still offer logical shifts to employees.
+
+* Below are additional plots I used to visualize the data during the exploratory phase of the analysis.  These are more technical and can be ignored if they aren't useful.  First are calendar plots that show the shape of sales throughout each day for the past three years.  Next is a time series decomposition that breaks down the data into its seasonal, trend, and random components.  That decomposition with monthly data comes first (page 5) then with daily data (page 6).
 
 \newpage
 # Appendix: 
@@ -315,7 +317,13 @@ prettify(data16.plot)
 \newpage
 ### Evaluating Seasonality and Trend: Monthly Data
 
-```{r time_series, echo = FALSE, warning=FALSE, message=FALSE}
+Notes: 
+
+* The drop off on the right side of the plot is due to only having about half a month of data for Dec 2018 as of the creation of this report.
+
+* 2018 was really a break out year for this business in sales and the trend line suggests that is likely to continue into 2019 to an extent.
+
+```{r time_series, echo = FALSE, warning=FALSE, message=FALSE, fig.height=3.7}
 
 exploratory.jh.time.series <- function(clean.df, freq = 365){
   require(lubridate)
