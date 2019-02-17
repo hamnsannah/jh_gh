@@ -1,0 +1,469 @@
+---
+title: "Supplier Snapshot - Sample Store"
+author: "JHarte & Associates + Allocate Analytics"
+date: "February 6, 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(dplyr)
+require(ggplot2)
+require(lubridate)
+require(knitr)
+require(fpp2)
+
+#What data graphs or tables to share?
+#Total sales, % of store in dept, sales by month,
+#Top selling and biggest growth categories, top selling and biggest growth suppliers, top selling and biggest growth products
+#Sales by month of seasonal cards
+
+
+#contents 2019
+
+#1 Autoplot of data for selected time period to show time period and a great viz out of the gate
+#2 text info about the products and the suppliers broken down
+
+#3 Text about the 80-20 rule - which suppliers' products generating the most sales and the least
+
+#####
+freemium.end.date <- as.Date("2018-12-31") ##### Date to end the data 
+#freemium.end.date <- as.Date("2099-12-31") #### removes no dates but does remove NAs
+#####
+
+#next if-else
+if(file.exists(paste0("data/sales.data.cache", Sys.Date(), ".csv"))){ #change back to "data/sales.data.cache" in this line and next
+  data.clean <- read.csv(paste0("data/sales.data.cache", Sys.Date(), ".csv"), stringsAsFactor = FALSE)
+} else {
+  
+import.jh.sql.connect <- function(db.name.in.sql.server){
+  library(odbc)
+  library(DBI)
+  
+  con <- DBI::dbConnect(odbc::odbc(),
+                        Driver = "SQL Server",
+                        Server = "LAPTOP-JHRVTF04\\SQLEXPRESS",
+                        Database = db.name.in.sql.server,
+                        Trusted_Connection = "True")
+  con
+}
+import.jh.detailed.sales <- function(){
+  joined.df <- DBI::dbGetQuery(con,'
+                                SELECT TransactionEntry.ItemID, TransactionEntry.Price, 
+                                 TransactionEntry.TransactionTime, TransactionEntry.Quantity, 
+                                  TransactionEntry.TransactionNumber, Item.Description, 
+                                 Department.Name AS "Department", Category.Name AS "Category", 
+                                 SupplierName AS "Supplier", Cashier.Name AS "CashierName", 
+                                 Register.Number AS "Register", Register.Description AS "RegLocation"
+                                 FROM TransactionEntry
+                                 
+                                 JOIN Item ON TransactionEntry.ItemID = Item.ID
+                                 JOIN Department ON Item.DepartmentID = Department.ID
+                                 JOIN Category ON Item.CategoryID = Category.ID
+                                 JOIN Supplier ON Item.SupplierID = Supplier.ID
+                                 JOIN [Transaction] ON TransactionEntry.TransactionNumber = [Transaction].TransactionNumber
+                                 JOIN Batch ON [Transaction].BatchNumber = Batch.BatchNumber
+                                 JOIN Register ON Batch.RegisterID = Register.ID
+                                 JOIN Cashier ON [Transaction].CashierID = Cashier.ID')
+  joined.df
+  }
+clean.jh.detailed.sales <- function(sql.df){
+  library(dplyr)
+  library(lubridate)
+    
+    sql.df <- sql.df %>%
+      rename(Sold.Price = Price, Cashier = CashierName, Date.Sold = TransactionTime,
+             Qty.Sold = Quantity, Transaction = TransactionNumber) %>%
+      mutate(Total.Sales = Qty.Sold*Sold.Price) %>%
+      select(Department, Category, Supplier, ItemID, Description, Qty.Sold, Sold.Price, 
+             Total.Sales, Transaction, Date.Sold, Register, Cashier)
+    
+    sql.df$Date.Sold <- ymd_hms(sql.df$Date.Sold)
+    sql.df$Year <- year(sql.df$Date.Sold)
+    sql.df$Month <- month(sql.df$Date.Sold)
+    sql.df$Department <- trimws(sql.df$Department)
+    sql.df$Category <- trimws(sql.df$Category)
+    sql.df$Supplier <- trimws(sql.df$Supplier)
+    sql.df$Item <- trimws(sql.df$Item)
+    #print(head(sql.df))
+    sql.df$Dept.By.Year <- paste(sql.df$Department, sql.df$Year)
+    sql.df$Categ.By.Year <- paste(sql.df$Category, sql.df$Year)
+    sql.df
+}
+
+con <- import.jh.sql.connect("WHALESTALE")
+new.df <- import.jh.detailed.sales() # uses con but not as argument
+data.clean <- clean.jh.detailed.sales(new.df)
+
+write.csv(data.clean, paste0("data/sales.data.cache", Sys.Date(), ".csv"), row.names = FALSE)
+}
+
+#read in another function independent of caching
+exploratory.jh.time.series <- function(clean.df, freq = 365){
+  require(lubridate)
+  require(dplyr)
+  clean.df <- arrange(clean.df, Date.Sold)
+  clean.df$Day <- date(clean.df$Date.Sold) # df should have been arranged in cleaning step
+  start.year <- year(clean.df$Day)[1]
+  if(freq == 365){
+    start.day <- date(head(clean.df$Day,1)) - floor_date(head(clean.df$Day,1), unit = "year")+1 # subtracts earliest day from first day of year plus one
+    sales.agg <- aggregate(Total.Sales ~ Day, clean.df, sum)
+    all.dates <- seq.Date(from = as.Date(min(sales.agg$Day, na.rm = TRUE)), to = as.Date(max(sales.agg$Day, na.rm = TRUE)),by = 1)
+    sales.agg.all <- left_join(data.frame(Day = all.dates), sales.agg)
+    sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.day), frequency = 365)
+  }
+  if(freq == 12){
+    start.month <- month(head(clean.df$Month,1))
+    sales.agg <- aggregate(Total.Sales ~ Month + Year, clean.df, sum)
+    #print(head(sales.agg, 25))
+    sales.agg.all <- left_join(sales.agg, data.frame(Month = 1:12))
+    sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.month), frequency = 12)
+  }
+  sales.ts[is.na(sales.ts)] <- 0
+  
+  sales.ts
+}
+
+######
+data.clean <- filter(data.clean, Department == "COUNTER CARD")
+######
+
+data.clean <- filter(data.clean, Date.Sold <= freemium.end.date) ##### check
+data.both <- data.clean
+dept.agg <- aggregate(Total.Sales ~ Dept.By.Year + Department + Categ.By.Year + Category + Year, data.both, sum)
+
+#data.both.supplier <- data.both
+#data.both.supplier$Supp.By.Year <- paste(data.both.supplier$Supplier, data.both.supplier$Year)
+#supplier.agg <- aggregate(Total.Sales ~ Supp.By.Year + Supplier + Year, data.both.supplier, sum)
+cy <- year(freemium.end.date)
+py <- year(freemium.end.date)-1
+dept.agg.cy <- filter(dept.agg, Year == cy)
+dept.cy.sum <- sum(dept.agg.cy$Total.Sales)
+dept.agg.cy <- mutate(dept.agg.cy, "Perc.Whole" = round((Total.Sales/dept.cy.sum)*100, 2))
+dept.agg.cy <- arrange(dept.agg.cy, desc(Total.Sales))
+
+prod.uniq <- length(unique(data.both$ItemID))
+cat.uniq <- length(unique(data.both$Category))
+dept.uniq <- length(unique(data.both$Department))
+```
+
+
+###This report enables a business to look at their suppliers a couple different ways.  Some of the questions it can help answer are the following:
+
+*	Are there suppliers generating so little in sales they’re not worth the shelf space, inventory, and communication I’m giving them?
+
+*	If I were to get rid of my smallest 50% of suppliers, how much would that represent in sales?
+
+*	Which suppliers brought in less this year than the year before?
+
+*	Which products are selling best for my best suppliers?
+
+*	Are there certain times of year when a top supplier’s products are selling better?
+
+Note: this report relies on data from `r as.Date(min(data.clean$Date.Sold, na.rm = TRUE))` to `r as.Date(max(data.clean$Date.Sold, na.rm = TRUE))`. 
+
+
+
+```{r, allin, echo = FALSE, warning=FALSE, message=FALSE, fig.height=3}
+allin.agg <- aggregate(Total.Sales ~ Year, dept.agg, sum)
+
+#####just a test
+#allin.agg <- filter(allin.agg, Year >= 2018)
+
+#####
+years.incl <- unique(allin.agg$Year)  # important because picking color palettes manually for lines
+
+all.ts <- exploratory.jh.time.series(data.clean, freq = 12)
+
+if(length(years.incl) == 1){
+
+  man.pal <- c("#67a9cf") #manual palette
+  
+  all.bar <- ggplot(data = allin.agg, aes(y = Total.Sales, x = factor(Year), fill = factor(Year))) + 
+    geom_bar(stat = "identity") + scale_y_continuous(labels = scales::dollar) + 
+    scale_fill_manual(name = "Year", values = man.pal) + theme_dark()+
+    labs(x = "Year", y = "Sales", title = "Total Sales from All Suppliers by Year") + 
+    theme(legend.position="none")
+
+year1.ts <- all.ts
+
+all.line <- autoplot(all.ts) + autolayer(year1.ts, color = man.pal[1], size = 3) + theme_dark()+ 
+  labs(y = "Sales", title = "Total Sales from All Suppliers by Month") +
+  scale_y_continuous(labels = scales::dollar)
+
+}
+
+if(length(years.incl) == 2){
+
+  man.pal <- c("#f7f7f7", "#67a9cf") #manual palette
+  
+  all.bar <- ggplot(data = allin.agg, aes(y = Total.Sales, x = factor(Year), fill = factor(Year))) + 
+  geom_bar(stat = "identity") + scale_y_continuous(labels = scales::dollar) + 
+  scale_fill_manual(name = "Year", values = man.pal) + theme_dark()+
+  labs(x = "Year", y = "Sales", title = "Total Sales from All Suppliers by Year") + theme(legend.position="none")
+
+
+year1.ts <- window(all.ts, end = c(years.incl[2],1))
+year2.ts <- window(all.ts, start = c(years.incl[2],1))
+all.line <- autoplot(all.ts) + autolayer(year1.ts, color = man.pal[1], size = 3) + 
+  autolayer(year2.ts, color = man.pal[2], size = 3) + theme_dark()+ 
+  labs(y = "Sales", title = "Total Sales from All Suppliers by Month") +
+  scale_y_continuous(labels = scales::dollar)
+}
+
+if(length(years.incl) == 3){
+
+all.bar <- ggplot(data = allin.agg, aes(y = Total.Sales, x = factor(Year), fill = factor(Year))) + 
+  geom_bar(stat = "identity") + scale_y_continuous(labels = scales::dollar) + 
+  scale_fill_brewer(name = "Year", palette = "RdBu") + theme_dark()+
+  labs(x = "Year", y = "Sales", title = "Total Sales from All Suppliers by Year") + theme(legend.position="none")
+
+man.pal <- c("#ef8a62", "#f7f7f7", "#67a9cf") #manual palette
+year1.ts <- window(all.ts, end = c(years.incl[2],1))
+year2.ts <- window(all.ts, start = c(years.incl[2],1), end = c(years.incl[3],1))
+year3.ts <- window(all.ts, start = c(years.incl[3],1))
+
+all.line <- autoplot(all.ts) + autolayer(year1.ts, color = man.pal[1], size = 3) + 
+  autolayer(year2.ts, color = man.pal[2], size = 3) + 
+  autolayer(year3.ts, color = man.pal[3], size = 3) + theme_dark() + 
+  labs(y = "Sales", title = "Total Sales from All Suppliers by Month") +
+  scale_y_continuous(labels = scales::dollar)
+
+}
+
+if(length(years.incl) == 4){
+#c(#ca0020, #f4a582, #92c5de, #0571b0)
+  
+  all.bar <- ggplot(data = allin.agg, aes(y = Total.Sales, x = factor(Year), fill = factor(Year))) + 
+  geom_bar(stat = "identity") + scale_y_continuous(labels = scales::dollar) + 
+  scale_fill_brewer(name = "Year", palette = "RdBu") + theme_dark()+
+  labs(x = "Year", y = "Sales", title = "Total Sales from All Suppliers by Year") + theme(legend.position="none")
+
+man.pal <- c("#ca0020", "#f4a582", "#92c5de", "#0571b0") #manual palette
+year1.ts <- window(all.ts, end = c(years.incl[2],1))
+year2.ts <- window(all.ts, start = c(years.incl[2],1), end = c(years.incl[3],1))
+year3.ts <- window(all.ts, start = c(years.incl[3],1), end = c(years.incl[4],1))
+year4.ts <- window(all.ts, start = c(years.incl[4],1))
+
+all.line <- autoplot(all.ts) + autolayer(year1.ts, color = man.pal[1], size = 3) + 
+  autolayer(year2.ts, color = man.pal[2], size = 3) + 
+  autolayer(year3.ts, color = man.pal[3], size = 3) + 
+  autolayer(year4.ts, color = man.pal[4], size = 3) + theme_dark()+ 
+  labs(y = "Sales", title = "Total Sales from All Suppliers by Month") +
+  scale_y_continuous(labels = scales::dollar)
+}
+
+if(length(years.incl) == 5){
+#c(#ca0020, #f4a582, #f7f7f7, #92c5de, #0571b0)
+  
+  all.bar <- ggplot(data = allin.agg, aes(y = Total.Sales, x = factor(Year), fill = factor(Year))) + 
+  geom_bar(stat = "identity") + scale_y_continuous(labels = scales::dollar) + 
+  scale_fill_brewer(name = "Year", palette = "RdBu") + theme_dark()+
+  labs(x = "Year", y = "Sales", title = "Total Sales from All Suppliers by Year") + theme(legend.position="none")
+
+man.pal <- c("#ca0020", "#f4a582", "#f7f7f7","#92c5de", "#0571b0") #manual palette
+year1.ts <- window(all.ts, end = c(years.incl[2],1))
+year2.ts <- window(all.ts, start = c(years.incl[2],1), end = c(years.incl[3],1))
+year3.ts <- window(all.ts, start = c(years.incl[3],1), end = c(years.incl[4],1))
+year4.ts <- window(all.ts, start = c(years.incl[4],1), end = c(years.incl[5],1))
+year5.ts <- window(all.ts, start = c(years.incl[5],1))
+
+all.line <- autoplot(all.ts) + autolayer(year1.ts, color = man.pal[1], size = 3) + 
+  autolayer(year2.ts, color = man.pal[2], size = 3) + 
+  autolayer(year3.ts, color = man.pal[3], size = 3) + 
+  autolayer(year4.ts, color = man.pal[4], size = 3) +
+  autolayer(year5.ts, color = man.pal[5], size = 3) + theme_dark()+ 
+  labs(y = "Sales", title = "Total Sales from All Suppliers by Month") +
+  scale_y_continuous(labels = scales::dollar)
+}
+
+#autoplot(all.ts) + theme_dark() + geom_line(aes(color = Year), size = 4) + scale_color_brewer(palette = "RdBu")
+
+
+
+```
+
+## Summary
+**For the selected time period there were `r prod.uniq` distinct products (SKUs) sold in `r cat.uniq` categories across `r dept.uniq` departments from different suppliers.**
+
+## Overview of Sales by Year and by Month for All Suppliers
+
+```{r, echo=FALSE}
+print(all.bar)
+print(all.line)
+
+```
+
+## Chart of Sales by LARGEST X% of Suppliers for 
+
+Some people are familiar with the 80-20 rule, or the Pareto Principle.  It states that in many areas of life and business 80% of the results come from 20% of the possible sources.  Examples include 80% of complaints come from 20% of customers or 80% of people in a country might only have 20% of the assets.  In our experience in business, the ratios aren’t quite that precise but it is often true that a large portion of sales can often come from a small portion of suppliers.  These next charts are meant to identify and visualize those portions for this particular business.
+
+
+\newpage
+
+## Who were the Top Suppliers in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`?
+
+```{r, echo=FALSE, fig.height=6}
+#dept.agg.py <- filter(dept.agg, Year == py)
+#dept.merge.py <- dept.agg.py[,c(2,4)]
+#colnames(dept.merge.py) <- c("Department", "Prior Yr")
+#dept.merge <- merge(dept.agg.cy, dept.merge.py, by.x="Department", all.x=TRUE, all.y=FALSE)
+#dept.merge <- mutate(dept.merge, "Growth" = Total.Sales - `Prior Yr`, "Perc.Growth" = 
+#                      paste0(round((Growth/`Prior Yr`)*100,1),"%")) %>%
+#  arrange(desc(Total.Sales)) %>%
+#  select(1,4:8)
+#colnames(dept.merge)[c(2,4)] <- c("Sales Current Yr", "Sales Prior Yr")
+#dept.merge[is.na(dept.merge)] <- 0
+
+### dept.yy here
+#dept.top10.cy.vec <- unique(dept.merge$Department)[1:10]
+#dept.agg.10 <- dept.agg[dept.agg$Department %in% unique(dept.merge$Department)[1:10],]
+#print(dept.top10.cy.vec)
+
+#horizontal bar chart showing top 10 Suppliers year over year
+#g <- ggplot(data = dept.agg.10, aes(x = Dept.By.Year, fill = factor(Year))) + 
+#  geom_bar(stat = "identity", aes(y = Total.Sales)) + coord_flip() +
+#  scale_y_continuous(labels = scales::dollar) +
+#  scale_fill_brewer(direction = 1, palette = "RdBu", name = "Year") + theme_dark() + 
+#  labs(title = "Sales From Top 10 Suppliers By Year", y = "Total Sales", x = "Supplier By #Year") 
+#print(g)
+
+#dept.agg.cy.pretty <- dept.merge
+#dept.agg.cy.pretty$Perc.Whole <- paste0(dept.agg.cy.pretty$Perc.Whole, "%")
+#dept.agg.cy.pretty$Growth <- paste0("$",prettyNum(round(dept.agg.cy.pretty$Growth), big.mark = #","))
+#dept.agg.cy.pretty$`Sales Prior Yr` <- paste0("$",prettyNum(round(dept.agg.cy.pretty$`Sales #Prior Yr`), big.mark = ","))
+#dept.agg.cy.pretty$`Sales Current Yr` <- paste0("$",prettyNum(round(dept.agg.cy.pretty$`Sales #Current Yr`), big.mark = ",")) ## Switch back
+#if(nrow(dept.agg.cy.pretty) < 25){
+#  kable.depts <- dept.agg.cy.pretty
+#} else {
+#  kable.depts <- dept.agg.cy.pretty[1:25,]
+#}
+#kable(kable.depts)
+```
+
+
+```{r, echo=FALSE}
+## Who are the SMALLEST 25% of Suppliers?
+#sup.merge <- arrange(sup.merge, `Sales Current Yr`)
+#supplier.agg.cy.pretty.b <-  sup.merge   #supplier.agg.cy.bottom
+#supplier.agg.cy.pretty.b$Perc.Whole <- paste0(supplier.agg.cy.pretty.b$Perc.Whole, "%")
+#supplier.agg.cy.pretty.b$`Sales Current Yr` <-paste0("$",prettyNum(round(supplier.agg.cy.pretty.b$`Sales Current Yr`), big.mark = ","))
+#supplier.agg.cy.pretty.b$`Sales Prior Yr` <-paste0("$",prettyNum(round(supplier.agg.cy.pretty.b$`Sales Prior Yr`), big.mark = ","))
+#supplier.agg.cy.pretty.b$Growth <-paste0("$",prettyNum(round(supplier.agg.cy.pretty.b$Growth), big.mark = ","))
+#kable(supplier.agg.cy.pretty.b[1:109,])
+
+####
+# for inline in next title
+top.dept1 <- dept.agg.cy$Department[1]
+top.dept2 <- dept.agg.cy$Department[2]
+top.dept3 <- dept.agg.cy$Department[3]
+```
+
+\newpage
+
+## Chart of Monthly Sales for `r top.dept1` - #1 Supplier in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`
+```{r, dept1, echo=FALSE, message=FALSE, warning=FALSE}
+
+dept1.df <- data.clean[data.clean$Department == dept.agg.cy$Department[1],]
+
+dept1.ts <- exploratory.jh.time.series(dept1.df, freq = 12)
+
+autoplot(dept1.ts) + theme_dark() + geom_line(color = "#67a9cf", size = 4)+ labs(y = "Sales") +
+  scale_y_continuous(labels = scales::dollar)
+
+exploratory.top.three.prod.ts <- function(dept.filter, df.to.use){
+  
+  require(dplyr)
+  require(fpp2)
+  exploratory.jh.time.series <- function(clean.df, freq = 365){
+    require(lubridate)
+    require(dplyr)
+    clean.df <- arrange(clean.df, Date.Sold)
+    clean.df$Day <- date(clean.df$Date.Sold) # df should have been arranged in cleaning step
+    start.year <- year(clean.df$Day)[1]
+    if(freq == 365){
+      start.day <- date(head(clean.df$Day,1)) - floor_date(head(clean.df$Day,1), unit = "year")+1 # subtracts earliest day from first day of year plus one
+      sales.agg <- aggregate(Total.Sales ~ Day, clean.df, sum)
+      all.dates <- seq.Date(from = as.Date(min(sales.agg$Day, na.rm = TRUE)), to = as.Date(max(sales.agg$Day, na.rm = TRUE)),by = 1)
+      sales.agg.all <- left_join(data.frame(Day = all.dates), sales.agg)
+      sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.day), frequency = 365)
+    }
+    if(freq == 12){
+      start.month <- month(head(clean.df$Month,1))
+      sales.agg <- aggregate(Total.Sales ~ Month + Year, clean.df, sum)
+      #print(head(sales.agg, 25))
+      sales.agg.all <- left_join(sales.agg, data.frame(Month = 1:12))
+      sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.month), frequency = 12)
+    }
+    sales.ts[is.na(sales.ts)] <- 0
+    
+    sales.ts
+  }
+  
+  df.one.dept <- filter(df.to.use, Department == dept.filter)
+  agg.by.prod <- aggregate(Total.Sales ~ Description, df.one.dept, sum)
+  agg.by.prod <- arrange(agg.by.prod, desc(Total.Sales))
+  top.prods <- agg.by.prod[c(1,2,3), 1]
+  
+  prod1 <- filter(df.one.dept, Description == top.prods[1])
+  prod1.ts <- exploratory.jh.time.series(prod1, freq = 12)
+  #print(head(prod1.ts))
+  
+  prod2 <- filter(df.one.dept, Description == top.prods[2])
+  prod2.ts <- exploratory.jh.time.series(prod2, freq = 12)
+  
+  prod3 <- filter(df.one.dept, Description == top.prods[3])
+  prod3.ts <- exploratory.jh.time.series(prod3, freq = 12)
+  
+  joint.ts <- ts.union(prod1.ts, prod2.ts, prod3.ts)
+  colnames(joint.ts) <- top.prods
+  #joint.length <- nrow(joint.ts)
+  #print(joint.length)
+  #label.vec <- seq(from = "1", to = joint.length, by = 3)
+  #print(label.vec)
+  
+  #create labels and breaks
+  df.to.use <- arrange(df.to.use, Date.Sold)
+  df.to.use <- df.to.use[!is.na(df.to.use$Date.Sold),]
+  df.to.use$Day <- date(df.to.use$Date.Sold)
+  start.year <- year(df.to.use$Day)[1]
+  end.year <- year(df.to.use$Day[length(df.to.use$Day)])
+
+  autoplot(joint.ts) +
+theme_dark() + theme(legend.position = "top") + geom_line(size = 2) + scale_color_brewer(direction = -1) + 
+    scale_x_continuous(breaks = seq(from = start.year, to = end.year, by = 1)) + 
+    labs(y = "Sales", title = paste0("Monthly Sales for the Top 3 Products from ", dept.filter)) +
+           scale_y_continuous(labels = scales::dollar)
+  #joint.df <- data.frame(Y=as.matrix(joint.ts), date=time(joint.ts))
+  #ggplot(data = joint.df, aes(x = data))
+
+}
+
+exploratory.top.three.prod.ts(top.dept1, data.clean)
+
+```
+
+## Chart of Monthly Sales for `r top.dept2` - #2 Supplier in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`
+```{r, dept2, echo=FALSE, message=FALSE, warning=FALSE}
+
+dept2.df <- data.clean[data.clean$Department == dept.agg.cy$Department[2],]
+
+dept2.ts <- exploratory.jh.time.series(dept2.df, freq = 12)
+
+autoplot(dept2.ts) + theme_dark() + geom_line(color = "#67a9cf", size = 4) + labs(y = "Sales") +
+  scale_y_continuous(labels = scales::dollar)
+
+exploratory.top.three.prod.ts(top.dept2, data.clean)
+```
+
+## Chart of Monthly Sales for `r top.dept3` - #3 Supplier in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`
+```{r, dept3, echo=FALSE, message=FALSE, warning=FALSE}
+
+dept3.df <- data.clean[data.clean$Department == dept.agg.cy$Department[3],]
+
+dept3.ts <- exploratory.jh.time.series(dept3.df, freq = 12)
+
+autoplot(dept3.ts) + theme_dark() + geom_line(color = "#67a9cf", size = 4) + labs(y = "Sales") +
+  scale_y_continuous(labels = scales::dollar)
+
+exploratory.top.three.prod.ts(top.dept3, data.clean)
