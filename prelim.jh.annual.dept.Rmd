@@ -12,6 +12,7 @@ require(ggplot2)
 require(lubridate)
 require(knitr)
 require(fpp2)
+library(ggridges)
 
 #What data graphs or tables to share?
 #Total sales, % of store in dept, sales by month,
@@ -29,6 +30,7 @@ require(fpp2)
 #####
 freemium.end.date <- as.Date("2018-12-31") ##### Date to end the data 
 #freemium.end.date <- as.Date("2099-12-31") #### removes no dates but does remove NAs
+data.start.date <- as.Date("2015-01-01") #as.Date("1900-01-01") #
 #####
 
 #next if-else
@@ -125,16 +127,17 @@ exploratory.jh.time.series <- function(clean.df, freq = 365){
 }
 
 ######
-data.clean <- filter(data.clean, Department == "COUNTER CARD")
+dept.filter <- "COUNTER CARD"
+data.clean <- filter(data.clean, Department == dept.filter)
 ######
 
-data.clean <- filter(data.clean, Date.Sold <= freemium.end.date) ##### check
+##### check: (based on dates provided above)
+data.clean <- filter(data.clean, Date.Sold <= freemium.end.date, 
+                     Date.Sold >= data.start.date) 
 data.both <- data.clean
 dept.agg <- aggregate(Total.Sales ~ Dept.By.Year + Department + Categ.By.Year + Category + Year, data.both, sum)
 
-#data.both.supplier <- data.both
-#data.both.supplier$Supp.By.Year <- paste(data.both.supplier$Supplier, data.both.supplier$Year)
-#supplier.agg <- aggregate(Total.Sales ~ Supp.By.Year + Supplier + Year, data.both.supplier, sum)
+
 cy <- year(freemium.end.date)
 py <- year(freemium.end.date)-1
 dept.agg.cy <- filter(dept.agg, Year == cy)
@@ -301,46 +304,205 @@ Some people are familiar with the 80-20 rule, or the Pareto Principle.  It state
 
 \newpage
 
-## Who were the Top Suppliers in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`?
+## Who were the Top Suppliers within the Department `r dept.filter` in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`?
 
 ```{r, echo=FALSE, fig.height=6}
-#dept.agg.py <- filter(dept.agg, Year == py)
-#dept.merge.py <- dept.agg.py[,c(2,4)]
-#colnames(dept.merge.py) <- c("Department", "Prior Yr")
-#dept.merge <- merge(dept.agg.cy, dept.merge.py, by.x="Department", all.x=TRUE, all.y=FALSE)
-#dept.merge <- mutate(dept.merge, "Growth" = Total.Sales - `Prior Yr`, "Perc.Growth" = 
-#                      paste0(round((Growth/`Prior Yr`)*100,1),"%")) %>%
-#  arrange(desc(Total.Sales)) %>%
-#  select(1,4:8)
-#colnames(dept.merge)[c(2,4)] <- c("Sales Current Yr", "Sales Prior Yr")
-#dept.merge[is.na(dept.merge)] <- 0
 
-### dept.yy here
-#dept.top10.cy.vec <- unique(dept.merge$Department)[1:10]
-#dept.agg.10 <- dept.agg[dept.agg$Department %in% unique(dept.merge$Department)[1:10],]
-#print(dept.top10.cy.vec)
+data.both.supplier <- data.both
+data.both.supplier$Supp.By.Year <- paste(data.both.supplier$Supplier, data.both.supplier$Year)
+supplier.agg <- aggregate(Total.Sales ~ Supp.By.Year + Supplier + Year, data.both.supplier, sum)
+cy <- year(freemium.end.date)
+py <- year(freemium.end.date)-1
+supplier.agg.cy <- filter(supplier.agg, Year == cy)
+supp.cy.sum <- sum(supplier.agg.cy$Total.Sales)
+supplier.agg.cy <- mutate(supplier.agg.cy, "Perc.Whole" = round((Total.Sales/supp.cy.sum)*100, 2))
+supplier.agg.cy <- arrange(supplier.agg.cy, desc(Total.Sales))
+
+
+supplier.agg.py <- filter(supplier.agg, Year == py)
+sup.merge.py <- supplier.agg.py[,c(2,4)]
+colnames(sup.merge.py) <- c("Supplier", "Prior Yr")
+sup.merge <- merge(supplier.agg.cy, sup.merge.py, by.x="Supplier", all.x=TRUE, all.y=FALSE)
+sup.merge <- mutate(sup.merge, "Growth" = Total.Sales - `Prior Yr`, "Perc.Growth" = 
+                      paste0(round((Growth/`Prior Yr`)*100,1),"%")) %>%
+  arrange(desc(Total.Sales)) %>%
+  select(1,4:8)
+colnames(sup.merge)[c(2,4)] <- c("Sales Current Yr", "Sales Prior Yr")
+sup.merge[is.na(sup.merge)] <- 0
+
+### sup.yy here
+sup.top10.cy.vec <- unique(sup.merge$Supplier)[1:10]
+supplier.agg.10 <- supplier.agg[supplier.agg$Supplier %in% unique(sup.merge$Supplier)[1:10],]
+#print(sup.top10.cy.vec)
 
 #horizontal bar chart showing top 10 Suppliers year over year
-#g <- ggplot(data = dept.agg.10, aes(x = Dept.By.Year, fill = factor(Year))) + 
-#  geom_bar(stat = "identity", aes(y = Total.Sales)) + coord_flip() +
-#  scale_y_continuous(labels = scales::dollar) +
-#  scale_fill_brewer(direction = 1, palette = "RdBu", name = "Year") + theme_dark() + 
-#  labs(title = "Sales From Top 10 Suppliers By Year", y = "Total Sales", x = "Supplier By #Year") 
-#print(g)
+g <- ggplot(data = supplier.agg.10, aes(x = Supp.By.Year, fill = factor(Year))) + 
+  geom_bar(stat = "identity", aes(y = Total.Sales)) + coord_flip() +
+  scale_y_continuous(labels = scales::dollar) +
+  scale_fill_brewer(direction = 1, palette = "YlGnBu", name = "Year") + theme_dark() + 
+  labs(title = "Sales From Top 10 Suppliers By Year", y = "Total Sales", x = "Supplier By Year") 
+print(g)
 
-#dept.agg.cy.pretty <- dept.merge
-#dept.agg.cy.pretty$Perc.Whole <- paste0(dept.agg.cy.pretty$Perc.Whole, "%")
-#dept.agg.cy.pretty$Growth <- paste0("$",prettyNum(round(dept.agg.cy.pretty$Growth), big.mark = #","))
-#dept.agg.cy.pretty$`Sales Prior Yr` <- paste0("$",prettyNum(round(dept.agg.cy.pretty$`Sales #Prior Yr`), big.mark = ","))
-#dept.agg.cy.pretty$`Sales Current Yr` <- paste0("$",prettyNum(round(dept.agg.cy.pretty$`Sales #Current Yr`), big.mark = ",")) ## Switch back
-#if(nrow(dept.agg.cy.pretty) < 25){
-#  kable.depts <- dept.agg.cy.pretty
-#} else {
-#  kable.depts <- dept.agg.cy.pretty[1:25,]
-#}
-#kable(kable.depts)
+supplier.agg.cy.pretty <- sup.merge
+supplier.agg.cy.pretty$Perc.Whole <- paste0(supplier.agg.cy.pretty$Perc.Whole, "%")
+supplier.agg.cy.pretty$Growth <- paste0("$",prettyNum(round(supplier.agg.cy.pretty$Growth), big.mark = ","))
+supplier.agg.cy.pretty$`Sales Prior Yr` <- paste0("$",prettyNum(round(supplier.agg.cy.pretty$`Sales Prior Yr`), big.mark = ","))
+supplier.agg.cy.pretty$`Sales Current Yr` <- paste0("$",prettyNum(round(supplier.agg.cy.pretty$`Sales Current Yr`), big.mark = ",")) ## Switch back
+if(nrow(supplier.agg.cy.pretty) < 25){
+  kable.suppliers <- supplier.agg.cy.pretty
+} else {
+  kable.suppliers <- supplier.agg.cy.pretty[1:25,]
+}
+kable(kable.suppliers)
 ```
 
+## What were the Top Categories within the Department `r dept.filter` in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`?
+
+```{r, top_categories, echo=FALSE, fig.height=6}
+data.both.cats <- data.both
+data.both.cats$Category.By.Year <- paste(data.both.cats$Category, 
+                                           data.both.cats$Year)
+cats.agg <- aggregate(Total.Sales ~ Category.By.Year + Category + Year, data.both.cats, sum)
+cy <- year(freemium.end.date)
+py <- year(freemium.end.date)-1
+cats.agg.cy <- filter(cats.agg, Year == cy)
+cats.cy.sum <- sum(cats.agg.cy$Total.Sales)
+cats.agg.cy <- mutate(cats.agg.cy, "Perc.Whole" = round((Total.Sales/cats.cy.sum)*100, 2))
+cats.agg.cy <- arrange(cats.agg.cy, desc(Total.Sales))
+
+
+cats.agg.py <- filter(cats.agg, Year == py)
+cats.merge.py <- cats.agg.py[,c(2,4)]
+colnames(cats.merge.py) <- c("Category", "Prior Yr")
+cats.merge <- merge(cats.agg.cy, cats.merge.py, by.x="Category", all.x=TRUE, all.y=FALSE)
+cats.merge <- mutate(cats.merge, "Growth" = Total.Sales - `Prior Yr`, "Perc.Growth" = 
+                      paste0(round((Growth/`Prior Yr`)*100,1),"%")) %>%
+  arrange(desc(Total.Sales)) %>%
+  select(1,4:8)
+colnames(cats.merge)[c(2,4)] <- c("Sales Current Yr", "Sales Prior Yr")
+cats.merge[is.na(cats.merge)] <- 0
+
+### cats.yy here
+cats.top10.cy.vec <- unique(cats.merge$Category)[1:10]
+cats.agg.10 <- cats.agg[cats.agg$Category %in% unique(cats.merge$Category)[1:10],]
+#print(cats.top10.cy.vec)
+
+#horizontal bar chart showing top 10 suppliers year over year
+g <- ggplot(data = cats.agg.10, aes(x = Category.By.Year, fill = factor(Year))) + 
+  geom_bar(stat = "identity", aes(y = Total.Sales)) + coord_flip() +
+  scale_y_continuous(labels = scales::dollar) +
+  scale_fill_brewer(direction = 1, palette = "Blues", name = "Year") + theme_dark() + 
+  labs(title = "Sales From Top 10 Categories By Year", y = "Total Sales", x = "Category By Year") 
+print(g)
+
+cats.agg.cy.pretty <- cats.merge
+cats.agg.cy.pretty$Perc.Whole <- paste0(cats.agg.cy.pretty$Perc.Whole, "%")
+cats.agg.cy.pretty$Growth <- paste0("$",prettyNum(round(cats.agg.cy.pretty$Growth), big.mark = ","))
+cats.agg.cy.pretty$`Sales Prior Yr` <- paste0("$",prettyNum(round(cats.agg.cy.pretty$`Sales Prior Yr`), big.mark = ","))
+cats.agg.cy.pretty$`Sales Current Yr` <- paste0("$",prettyNum(round(cats.agg.cy.pretty$`Sales Current Yr`), big.mark = ",")) ## Switch back
+if(nrow(cats.agg.cy.pretty) < 25){
+  kable.cats <- cats.agg.cy.pretty
+} else {
+  kable.cats <- cats.agg.cy.pretty[1:25,]
+}
+kable(kable.cats)
+```
+
+\newpage
+## What were the Top Items within the Department `r dept.filter` in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`?
+
+```{r, top_items, echo=FALSE, fig.height=6}
+data.both.item <- data.both
+data.both.item$Item.By.Year <- paste(data.both.item$Description, 
+                                           data.both.item$Year)
+item.agg <- aggregate(Total.Sales ~ Item.By.Year + Description + Year, data.both.item, sum)
+cy <- year(freemium.end.date)
+py <- year(freemium.end.date)-1
+item.agg.cy <- filter(item.agg, Year == cy)
+item.cy.sum <- sum(item.agg.cy$Total.Sales)
+item.agg.cy <- mutate(item.agg.cy, "Perc.Whole" = round((Total.Sales/item.cy.sum)*100, 2))
+item.agg.cy <- arrange(item.agg.cy, desc(Total.Sales))
+
+
+item.agg.py <- filter(item.agg, Year == py)
+item.merge.py <- item.agg.py[,c(2,4)]
+colnames(item.merge.py) <- c("Description", "Prior Yr")
+item.merge <- merge(item.agg.cy, item.merge.py, by.x="Description", all.x=TRUE, all.y=FALSE)
+item.merge <- mutate(item.merge, "Growth" = Total.Sales - `Prior Yr`, "Perc.Growth" = 
+                      paste0(round((Growth/`Prior Yr`)*100,1),"%")) %>%
+  arrange(desc(Total.Sales)) %>%
+  select(1,4:8)
+colnames(item.merge)[c(2,4)] <- c("Sales Current Yr", "Sales Prior Yr")
+item.merge[is.na(item.merge)] <- 0
+
+### item.yy here
+item.top10.cy.vec <- unique(item.merge$Description)[1:10]
+item.agg.10 <- item.agg[item.agg$Description %in% unique(item.merge$Description)[1:10],]
+#print(item.top10.cy.vec)
+
+#horizontal bar chart showing top 10 suppliers year over year
+g <- ggplot(data = item.agg.10, aes(x = Item.By.Year, fill = factor(Year))) + 
+  geom_bar(stat = "identity", aes(y = Total.Sales)) + coord_flip() +
+  scale_y_continuous(labels = scales::dollar) +
+  scale_fill_brewer(direction = 1, palette = "Blues", name = "Year") + theme_dark() + 
+  labs(title = "Sales From Top 10 Items By Year", y = "Total Sales", x = "Item By Year") 
+print(g)
+
+item.agg.cy.pretty <- item.merge
+item.agg.cy.pretty$Perc.Whole <- paste0(item.agg.cy.pretty$Perc.Whole, "%")
+item.agg.cy.pretty$Growth <- paste0("$",prettyNum(round(item.agg.cy.pretty$Growth), big.mark = ","))
+item.agg.cy.pretty$`Sales Prior Yr` <- paste0("$",prettyNum(round(item.agg.cy.pretty$`Sales Prior Yr`), big.mark = ","))
+item.agg.cy.pretty$`Sales Current Yr` <- paste0("$",prettyNum(round(item.agg.cy.pretty$`Sales Current Yr`), big.mark = ",")) ## Switch back
+if(nrow(item.agg.cy.pretty) < 25){
+  kable.item <- item.agg.cy.pretty
+} else {
+  kable.item <- item.agg.cy.pretty[1:25,]
+}
+kable(kable.item)
+```
+
+```{r ridges, echo=FALSE}
+#Exclude from template
+
+seasonal.cats <- c(T, F, F, F, F, F, F, F, F, F, F, T, F, F, F, T, F, F, F, F, T, F, F, F, T, T, T, T, F, T, F, T, T, F, F, F, T, T, F, F, T, F, T, F, F, F)
+# built off of the 2018 unique category names, of which there were 46
+card.cats18 <- filter(data.clean, Year == 2018)
+card.cats18 <- arrange(card.cats18, Category)
+uniq.cats <- unique(card.cats18$Category)
+seasonal.catnames <- uniq.cats[seasonal.cats]
+
+card.data18daily <- card.cats18
+card.data18daily$Date <- date(card.data18daily$Date.Sold)
+card.ridges18daily <- aggregate(Total.Sales ~ Category + Date, card.data18daily, sum)
+#seasonal.catnames <- seasonal.catnames$Category
+card.ridges18daily <- filter(card.ridges18daily, Category %in% seasonal.catnames)
+ggdaily <- ggplot(data = card.ridges18daily, aes(x = Date, y = as.factor(Category),  height = Total.Sales, group = as.factor(Category))) + geom_density_ridges(fill = "light blue", stat = "identity")
+ggdaily <- ggdaily + theme_dark() #+ scale_x_date(breaks = 13, labels = c("J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D", "J"))
+#ggdaily <- ggdaily + scale_fill_distiller(direction = -1)
+ggdaily
+
+```
+
+
+### For Reference: the Top 200 cards by Sales in 2018
+
+```{r, echo=FALSE}
+item.agg.units <- aggregate(Total.Sales ~ Item.By.Year + Description + Year + Item + Supplier, data.both.item, length)
+item.agg.units <- filter(item.agg.units, Year == cy)
+item.agg.units$Product <- paste0(item.agg.units$Description, " (",
+                                 item.agg.units$Item, ") by ", 
+                                 item.agg.units$Supplier)
+item.agg.units.merge <- merge(item.agg.cy.pretty, item.agg.units, by.x = "Description", by.y = "Description", all.x = TRUE, all.y = TRUE)
+item.agg.units.merge$cy.num <- as.numeric(substr(x = item.agg.units.merge$`Sales Current Yr`, start = 2, stop = nchar(item.agg.units.merge$`Sales Current Yr`)))
+
+item.agg.units.merge <- item.agg.units.merge %>%
+  arrange(desc(cy.num)) %>%
+  select(Product, `Sales Current Yr`, "Units" = Total.Sales)
+item.agg.units.merge <- item.agg.units.merge[1:200,]
+kable(item.agg.units.merge)
+
+
+```
 
 ```{r, echo=FALSE}
 ## Who are the SMALLEST 25% of Suppliers?
@@ -364,12 +526,12 @@ top.dept3 <- dept.agg.cy$Department[3]
 ## Chart of Monthly Sales for `r top.dept1` - #1 Supplier in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`
 ```{r, dept1, echo=FALSE, message=FALSE, warning=FALSE}
 
-dept1.df <- data.clean[data.clean$Department == dept.agg.cy$Department[1],]
+#dept1.df <- data.clean[data.clean$Department == dept.agg.cy$Department[1],]
 
-dept1.ts <- exploratory.jh.time.series(dept1.df, freq = 12)
+#dept1.ts <- exploratory.jh.time.series(dept1.df, freq = 12)
 
-autoplot(dept1.ts) + theme_dark() + geom_line(color = "#67a9cf", size = 4)+ labs(y = "Sales") +
-  scale_y_continuous(labels = scales::dollar)
+#autoplot(dept1.ts) + theme_dark() + geom_line(color = "#67a9cf", size = 4)+ labs(y = "Sales") +
+#  scale_y_continuous(labels = scales::dollar)
 
 exploratory.top.three.prod.ts <- function(dept.filter, df.to.use){
   
@@ -439,31 +601,31 @@ theme_dark() + theme(legend.position = "top") + geom_line(size = 2) + scale_colo
 
 }
 
-exploratory.top.three.prod.ts(top.dept1, data.clean)
+#exploratory.top.three.prod.ts(top.dept1, data.clean)
 
 ```
 
 ## Chart of Monthly Sales for `r top.dept2` - #2 Supplier in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`
 ```{r, dept2, echo=FALSE, message=FALSE, warning=FALSE}
 
-dept2.df <- data.clean[data.clean$Department == dept.agg.cy$Department[2],]
+#dept2.df <- data.clean[data.clean$Department == dept.agg.cy$Department[2],]
 
-dept2.ts <- exploratory.jh.time.series(dept2.df, freq = 12)
+#dept2.ts <- exploratory.jh.time.series(dept2.df, freq = 12)
 
-autoplot(dept2.ts) + theme_dark() + geom_line(color = "#67a9cf", size = 4) + labs(y = "Sales") +
-  scale_y_continuous(labels = scales::dollar)
+#autoplot(dept2.ts) + theme_dark() + geom_line(color = "#67a9cf", size = 4) + labs(y = "Sales") +
+#  scale_y_continuous(labels = scales::dollar)
 
-exploratory.top.three.prod.ts(top.dept2, data.clean)
+#exploratory.top.three.prod.ts(top.dept2, data.clean)
 ```
 
 ## Chart of Monthly Sales for `r top.dept3` - #3 Supplier in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`
 ```{r, dept3, echo=FALSE, message=FALSE, warning=FALSE}
 
-dept3.df <- data.clean[data.clean$Department == dept.agg.cy$Department[3],]
+#dept3.df <- data.clean[data.clean$Department == dept.agg.cy$Department[3],]
 
-dept3.ts <- exploratory.jh.time.series(dept3.df, freq = 12)
+#dept3.ts <- exploratory.jh.time.series(dept3.df, freq = 12)
 
-autoplot(dept3.ts) + theme_dark() + geom_line(color = "#67a9cf", size = 4) + labs(y = "Sales") +
-  scale_y_continuous(labels = scales::dollar)
+#autoplot(dept3.ts) + theme_dark() + geom_line(color = "#67a9cf", size = 4) + labs(y = "Sales") +
+#  scale_y_continuous(labels = scales::dollar)
 
-exploratory.top.three.prod.ts(top.dept3, data.clean)
+#exploratory.top.three.prod.ts(top.dept3, data.clean)
