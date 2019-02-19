@@ -1,7 +1,7 @@
 ---
 title: "Staffing Analysis - Sample Store"
-author: "Allocate Analytics"
-date: "February 9, 2019"
+author: "JHarte & Associates + Allocate Analytics"
+date: "February 18, 2019"
 output: pdf_document
 ---
 
@@ -110,7 +110,12 @@ data17.plot <- data17.agg %>%
 ```
 
 ### Staffing Based on Sales in Recent Months
-######Note: The calculations for the yellow dots are placeholders.  More information is needed before creating actual staffing projections from sales for this store.  However, the blue areas and red line are based on real data.  The lightest blue area represents a range that sales fall within for that hour 50% of the time.  The slightly darker blue represents the 75% range, and the darkest blue represents 95%.  The red is the mean or average sales level for that hour for the selected time period. 
+
+This chart is meant to answer the question how many staff are needed at each hour of the day.  The main assumption here is that more sales mean more customers present, which requires more staff to support them.  For this particular data set, we need more info on current staffing levels to complete the analysis such as least number of employees to keep the store open, what is the highest staffing level scheduled at busiest time of the year, etc.  As a result, the calculations for the yellow dots are placeholders.
+
+The blue areas and red line are based on actual data and the axis on the left shows the scale of dollars.  The lightest blue area represents a range that sales fall within for that hour 50% of the time.  The slightly darker blue represents the 75% range, and the darkest blue represents 95%.  The red is the mean or average sales level for that hour for the selected time period. 
+
+This plot indicates that 4pm is most often the busiest hour of the day over about the past six months.  The average (red line) is around $250 for that hour from 4-5pm.  50% of the time sales are between around $200-$350 (lightest blue).  75% of the time sales are between $140-$420 (slightly darker blue), and 95% of the time sales are between $50-$560.
 
 ```{r off.peak.minimum, echo=FALSE, warning=FALSE, message=FALSE}
 
@@ -260,15 +265,13 @@ df.all <- df1
 staffing.day.plot.dots(df.all)
 
 ```
-Notes:
+Additional Notes:
 
-* This chart is meant to answer the question how many staff are needed at the different points of the day.  The main assumption here is that more sales mean more customers present, which requires more staff to support them.  For this particular data set, we need more info on current staffing levels such as least number of employees to keep the store open, max number scheduled, etc.
+* As shown in the Appendix below, the sales for this store don't exhibit a very seasonal pattern, so there's not a need to look at weekend vs. weekday or January vs. June because there aren't clear differences.  However, there has been a significant upward trend in 2018.  In light of that, I included data from July 1, 2018 to Dec 17, 2018, which is the latest date for which I have full data.  The red area shows the average sales level for each hour for every day during that period.
 
-* As shown in the Appendix below, the sales for this store don't exhibit a very seasonal pattern, so there's not a need for a plot with February sales data as distinct from a plot with January data.  However, there has been a significant upward trend in 2018.  In light of that, I included data from July 1, 2018 to Dec 17, 2018, which is the latest date for which I have full data.  The red area shows the average sales level for each hour for every day during taht period.
+* This report isn't meant to suggest managers should schedule people for 1 hour shifts or follow these levels exactly.  This report shows how many staff are likely to be required at a particular hour of the day  Management is best positioned to know how best to use this analysis while still offering logical shifts to employees.
 
-* This report isn't meant to suggest managers should schedule people for 1 hour shifts or follow these levels exactly.  This report shows how many staff are likely to be required at a particular time.  It's management's discretion how best to use this to still offer logical shifts to employees.
-
-* Below are additional plots I used to visualize the data during the exploratory phase of the analysis.  These are more technical and can be ignored if they aren't useful.  First are calendar plots that show the shape of sales throughout each day for the past three years.  Next is a time series decomposition that breaks down the data into its seasonal, trend, and random components.  That decomposition with monthly data comes first (page 5) then with daily data (page 6).
+* The succeeding pages contain additional plots I used to visualize the data during the exploratory phase of the analysis.  These are more technical and can be ignored if they aren't useful.  First are calendar plots that show the shape of sales throughout each day for the past three years.  Next is a time series decomposition that breaks down the data into its seasonal, trend, and random components.  A time series decomposition with monthly data comes first (page 5) then with daily data (page 6).
 
 \newpage
 # Appendix: 

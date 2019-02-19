@@ -26,8 +26,8 @@ freemium.end.date <- as.Date("2018-12-31") ##### Date to end the data
 #####
 
 #next if-else
-if(file.exists(paste0("data/anon.sales", Sys.Date(), ".csv"))){ #change back to "data/sales.data.cache" in this line and next
-  data.clean <- read.csv(paste0("data/anon.sales", Sys.Date(), ".csv"), stringsAsFactor = FALSE)
+if(file.exists(paste0("data/sales.data.cache", Sys.Date(), ".csv"))){ #change back to "data/sales.data.cache" in this line and next
+  data.clean <- read.csv(paste0("data/sales.data.cache", Sys.Date(), ".csv"), stringsAsFactor = FALSE)
 } else {
   
 import.jh.sql.connect <- function(db.name.in.sql.server){
@@ -85,7 +85,7 @@ clean.jh.detailed.sales <- function(sql.df){
     sql.df
 }
 
-con <- import.jh.sql.connect("WHALESTALE")
+con <- import.jh.sql.connect("Sam's Store")
 new.df <- import.jh.detailed.sales() # uses con but not as argument
 data.clean <- clean.jh.detailed.sales(new.df)
 
