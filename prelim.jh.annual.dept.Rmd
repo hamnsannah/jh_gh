@@ -1,7 +1,7 @@
 ---
-title: "Supplier Snapshot - Sample Store"
-author: "JHarte & Associates + Allocate Analytics"
-date: "February 6, 2019"
+title: "Counter Cards 2018 in Review - Whale's Tale"
+author: "Allocate Analytics"
+date: "February 18, 2019"
 output: pdf_document
 ---
 
@@ -147,21 +147,25 @@ dept.agg.cy <- arrange(dept.agg.cy, desc(Total.Sales))
 
 prod.uniq <- length(unique(data.both$ItemID))
 cat.uniq <- length(unique(data.both$Category))
-dept.uniq <- length(unique(data.both$Department))
+supp.uniq <- length(unique(data.both$Supplier))
 ```
 
 
-###This report enables a business to look at their suppliers a couple different ways.  Some of the questions it can help answer are the following:
+###This report provides a year in review for the Department `r dept.filter`
 
-*	Are there suppliers generating so little in sales they’re not worth the shelf space, inventory, and communication I’m giving them?
+Some of the questions it can be used to answer:
 
-*	If I were to get rid of my smallest 50% of suppliers, how much would that represent in sales?
+*	Is this department growing or shrinking vs. last year?
 
-*	Which suppliers brought in less this year than the year before?
+* What are the busier and less busy times of year for this department?
 
-*	Which products are selling best for my best suppliers?
+* Who are the top suppliers in this department and how did they do in 2018 vs. years past?
 
-*	Are there certain times of year when a top supplier’s products are selling better?
+* What are the top categories in this department and how did they do in 2018 vs. years past?
+
+* What are the top products in this department and how did they do in 2018 vs. years past?
+
+* Which time of year do the seasonal card categories sell or not?
 
 Note: this report relies on data from `r as.Date(min(data.clean$Date.Sold, na.rm = TRUE))` to `r as.Date(max(data.clean$Date.Sold, na.rm = TRUE))`. 
 
@@ -240,7 +244,7 @@ if(length(years.incl) == 4){
   all.bar <- ggplot(data = allin.agg, aes(y = Total.Sales, x = factor(Year), fill = factor(Year))) + 
   geom_bar(stat = "identity") + scale_y_continuous(labels = scales::dollar) + 
   scale_fill_brewer(name = "Year", palette = "RdBu") + theme_dark()+
-  labs(x = "Year", y = "Sales", title = "Total Sales from All Suppliers by Year") + theme(legend.position="none")
+  labs(x = "Year", y = "Sales", title = "Total Sales in Department by Year") + theme(legend.position="none")
 
 man.pal <- c("#ca0020", "#f4a582", "#92c5de", "#0571b0") #manual palette
 year1.ts <- window(all.ts, end = c(years.incl[2],1))
@@ -252,7 +256,7 @@ all.line <- autoplot(all.ts) + autolayer(year1.ts, color = man.pal[1], size = 3)
   autolayer(year2.ts, color = man.pal[2], size = 3) + 
   autolayer(year3.ts, color = man.pal[3], size = 3) + 
   autolayer(year4.ts, color = man.pal[4], size = 3) + theme_dark()+ 
-  labs(y = "Sales", title = "Total Sales from All Suppliers by Month") +
+  labs(y = "Sales", title = "Total Sales in Department by Month") +
   scale_y_continuous(labels = scales::dollar)
 }
 
@@ -282,25 +286,18 @@ all.line <- autoplot(all.ts) + autolayer(year1.ts, color = man.pal[1], size = 3)
 
 #autoplot(all.ts) + theme_dark() + geom_line(aes(color = Year), size = 4) + scale_color_brewer(palette = "RdBu")
 
-
-
 ```
 
 ## Summary
-**For the selected time period there were `r prod.uniq` distinct products (SKUs) sold in `r cat.uniq` categories across `r dept.uniq` departments from different suppliers.**
+**For the selected time period there were `r prod.uniq` distinct products (SKUs) sold by `r supp.uniq` suppliers in `r cat.uniq` categories within the `r dept.filter` department.**
 
-## Overview of Sales by Year and by Month for All Suppliers
+## Overview of Sales by Year and by Month for `r dept.filter`
 
 ```{r, echo=FALSE}
 print(all.bar)
 print(all.line)
 
 ```
-
-## Chart of Sales by LARGEST X% of Suppliers for 
-
-Some people are familiar with the 80-20 rule, or the Pareto Principle.  It states that in many areas of life and business 80% of the results come from 20% of the possible sources.  Examples include 80% of complaints come from 20% of customers or 80% of people in a country might only have 20% of the assets.  In our experience in business, the ratios aren’t quite that precise but it is often true that a large portion of sales can often come from a small portion of suppliers.  These next charts are meant to identify and visualize those portions for this particular business.
-
 
 \newpage
 
@@ -339,7 +336,7 @@ supplier.agg.10 <- supplier.agg[supplier.agg$Supplier %in% unique(sup.merge$Supp
 g <- ggplot(data = supplier.agg.10, aes(x = Supp.By.Year, fill = factor(Year))) + 
   geom_bar(stat = "identity", aes(y = Total.Sales)) + coord_flip() +
   scale_y_continuous(labels = scales::dollar) +
-  scale_fill_brewer(direction = 1, palette = "YlGnBu", name = "Year") + theme_dark() + 
+  scale_fill_brewer(direction = 1, palette = "Blues", name = "Year") + theme_dark() + 
   labs(title = "Sales From Top 10 Suppliers By Year", y = "Total Sales", x = "Supplier By Year") 
 print(g)
 
@@ -415,7 +412,7 @@ kable(kable.cats)
 data.both.item <- data.both
 data.both.item$Item.By.Year <- paste(data.both.item$Description, 
                                            data.both.item$Year)
-item.agg <- aggregate(Total.Sales ~ Item.By.Year + Description + Year, data.both.item, sum)
+item.agg <- aggregate(Total.Sales ~ Item.By.Year + Description + Year + Item, data.both.item, sum)
 cy <- year(freemium.end.date)
 py <- year(freemium.end.date)-1
 item.agg.cy <- filter(item.agg, Year == cy)
@@ -425,14 +422,14 @@ item.agg.cy <- arrange(item.agg.cy, desc(Total.Sales))
 
 
 item.agg.py <- filter(item.agg, Year == py)
-item.merge.py <- item.agg.py[,c(2,4)]
+item.merge.py <- item.agg.py[,c(2,5)]
 colnames(item.merge.py) <- c("Description", "Prior Yr")
 item.merge <- merge(item.agg.cy, item.merge.py, by.x="Description", all.x=TRUE, all.y=FALSE)
 item.merge <- mutate(item.merge, "Growth" = Total.Sales - `Prior Yr`, "Perc.Growth" = 
                       paste0(round((Growth/`Prior Yr`)*100,1),"%")) %>%
   arrange(desc(Total.Sales)) %>%
-  select(1,4:8)
-colnames(item.merge)[c(2,4)] <- c("Sales Current Yr", "Sales Prior Yr")
+  select(1,4:9)
+colnames(item.merge)[c(3,5)] <- c("Sales Current Yr", "Sales Prior Yr")
 item.merge[is.na(item.merge)] <- 0
 
 ### item.yy here
@@ -458,13 +455,16 @@ if(nrow(item.agg.cy.pretty) < 25){
 } else {
   kable.item <- item.agg.cy.pretty[1:25,]
 }
-kable(kable.item)
+kable(kable.item[,c(1,3:7)])
 ```
+
+##Chart of When Sales Occur for Holiday/Seasonal Card Categories
 
 ```{r ridges, echo=FALSE}
 #Exclude from template
 
-seasonal.cats <- c(T, F, F, F, F, F, F, F, F, F, F, T, F, F, F, T, F, F, F, F, T, F, F, F, T, T, T, T, F, T, F, T, T, F, F, F, T, T, F, F, T, F, T, F, F, F)
+seasonal.cats <- c(T, F, F, F, F, F, F, F, F, F, F, T, F, F, F, T, F, F, F, F, T, F, F, 
+                   F, T, T, T, T, F, T, F, T, T, F, F, F, T, T, F, F, T, F, T, F, F, F)
 # built off of the 2018 unique category names, of which there were 46
 card.cats18 <- filter(data.clean, Year == 2018)
 card.cats18 <- arrange(card.cats18, Category)
@@ -476,15 +476,20 @@ card.data18daily$Date <- date(card.data18daily$Date.Sold)
 card.ridges18daily <- aggregate(Total.Sales ~ Category + Date, card.data18daily, sum)
 #seasonal.catnames <- seasonal.catnames$Category
 card.ridges18daily <- filter(card.ridges18daily, Category %in% seasonal.catnames)
-ggdaily <- ggplot(data = card.ridges18daily, aes(x = Date, y = as.factor(Category),  height = Total.Sales, group = as.factor(Category))) + geom_density_ridges(fill = "light blue", stat = "identity")
-ggdaily <- ggdaily + theme_dark() #+ scale_x_date(breaks = 13, labels = c("J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D", "J"))
+ggdaily <- ggplot(data = card.ridges18daily, aes(x = Date, y = as.factor(Category),  
+                                                 height = Total.Sales,group = as.factor(Category))) +
+  geom_density_ridges(fill = "light blue", stat = "identity") + labs(y = "Holiday Card Category")
+ggdaily <- ggdaily + theme_dark() + scale_x_date(minor_breaks = as_date(c("2018-01-01", "2018-02-01", "2018-03-01", "2018-04-01",
+                                                                          "2018-05-01", "2018-06-01", "2018-07-01", "2018-08-01",
+                                                                          "2018-09-01", "2018-10-01", "2018-11-01","2018-12-01")))
+                                                 #, labels = c("J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D", "J"))
 #ggdaily <- ggdaily + scale_fill_distiller(direction = -1)
 ggdaily
 
 ```
 
 
-### For Reference: the Top 200 cards by Sales in 2018
+## For Reference: the Top 200 cards by Sales in 2018
 
 ```{r, echo=FALSE}
 item.agg.units <- aggregate(Total.Sales ~ Item.By.Year + Description + Year + Item + Supplier, data.both.item, length)
@@ -492,7 +497,7 @@ item.agg.units <- filter(item.agg.units, Year == cy)
 item.agg.units$Product <- paste0(item.agg.units$Description, " (",
                                  item.agg.units$Item, ") by ", 
                                  item.agg.units$Supplier)
-item.agg.units.merge <- merge(item.agg.cy.pretty, item.agg.units, by.x = "Description", by.y = "Description", all.x = TRUE, all.y = TRUE)
+item.agg.units.merge <- merge(item.agg.cy.pretty, item.agg.units, by.x = "Item", by.y = "Item", all.x = TRUE, all.y = TRUE)
 item.agg.units.merge$cy.num <- as.numeric(substr(x = item.agg.units.merge$`Sales Current Yr`, start = 2, stop = nchar(item.agg.units.merge$`Sales Current Yr`)))
 
 item.agg.units.merge <- item.agg.units.merge %>%
@@ -501,29 +506,17 @@ item.agg.units.merge <- item.agg.units.merge %>%
 item.agg.units.merge <- item.agg.units.merge[1:200,]
 kable(item.agg.units.merge)
 
-
 ```
 
 ```{r, echo=FALSE}
-## Who are the SMALLEST 25% of Suppliers?
-#sup.merge <- arrange(sup.merge, `Sales Current Yr`)
-#supplier.agg.cy.pretty.b <-  sup.merge   #supplier.agg.cy.bottom
-#supplier.agg.cy.pretty.b$Perc.Whole <- paste0(supplier.agg.cy.pretty.b$Perc.Whole, "%")
-#supplier.agg.cy.pretty.b$`Sales Current Yr` <-paste0("$",prettyNum(round(supplier.agg.cy.pretty.b$`Sales Current Yr`), big.mark = ","))
-#supplier.agg.cy.pretty.b$`Sales Prior Yr` <-paste0("$",prettyNum(round(supplier.agg.cy.pretty.b$`Sales Prior Yr`), big.mark = ","))
-#supplier.agg.cy.pretty.b$Growth <-paste0("$",prettyNum(round(supplier.agg.cy.pretty.b$Growth), big.mark = ","))
-#kable(supplier.agg.cy.pretty.b[1:109,])
-
 ####
 # for inline in next title
 top.dept1 <- dept.agg.cy$Department[1]
 top.dept2 <- dept.agg.cy$Department[2]
 top.dept3 <- dept.agg.cy$Department[3]
-```
-
-\newpage
 
 ## Chart of Monthly Sales for `r top.dept1` - #1 Supplier in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`
+```
 ```{r, dept1, echo=FALSE, message=FALSE, warning=FALSE}
 
 #dept1.df <- data.clean[data.clean$Department == dept.agg.cy$Department[1],]
@@ -603,9 +596,10 @@ theme_dark() + theme(legend.position = "top") + geom_line(size = 2) + scale_colo
 
 #exploratory.top.three.prod.ts(top.dept1, data.clean)
 
-```
+
 
 ## Chart of Monthly Sales for `r top.dept2` - #2 Supplier in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`
+```
 ```{r, dept2, echo=FALSE, message=FALSE, warning=FALSE}
 
 #dept2.df <- data.clean[data.clean$Department == dept.agg.cy$Department[2],]
@@ -616,9 +610,10 @@ theme_dark() + theme(legend.position = "top") + geom_line(size = 2) + scale_colo
 #  scale_y_continuous(labels = scales::dollar)
 
 #exploratory.top.three.prod.ts(top.dept2, data.clean)
-```
+
 
 ## Chart of Monthly Sales for `r top.dept3` - #3 Supplier in `r year(as.Date(max(data.clean$Date.Sold, na.rm = TRUE)))`
+```
 ```{r, dept3, echo=FALSE, message=FALSE, warning=FALSE}
 
 #dept3.df <- data.clean[data.clean$Department == dept.agg.cy$Department[3],]
