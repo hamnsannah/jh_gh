@@ -1,8 +1,6 @@
 
 #takes as input the output of the clean.jh.detailed.sales.R script
 
-#STILL NEED TO JOIN WITH SEQUENCE WITH ALL DATES TO FILL IN MISSING DATA.  THERE AREN'T SALES FOR EVERY DATE
-
 exploratory.jh.time.series <- function(clean.df, freq = 365){
   # includes day, week, and year frequency options
   if(freq == 52){print("Error: use freq = 53 for weekly to account for partial week at EOY")}
