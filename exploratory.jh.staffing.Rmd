@@ -18,7 +18,11 @@ library(fpp2)
 #data.clean <- read.csv("data/mutated.data1417.csv", stringsAsFactors = FALSE)
 
 #####
-import.jh.sql.connect <- function(db.name.in.sql.server){
+
+if(file.exists(paste0("data/sales.data.cache", Sys.Date(), ".csv"))){
+  data.clean <- read.csv(paste0("data/sales.data.cache", Sys.Date(), ".csv"), stringsAsFactor = FALSE)
+} else {
+  import.jh.sql.connect <- function(db.name.in.sql.server){
   library(odbc)
   library(DBI)
   
@@ -29,8 +33,7 @@ import.jh.sql.connect <- function(db.name.in.sql.server){
                         Trusted_Connection = "True")
   con
 }
-
-import.jh.detailed.sales <- function(){
+  import.jh.detailed.sales <- function(){
   joined.df <- DBI::dbGetQuery(con,'
                                 SELECT TransactionEntry.ItemID, TransactionEntry.Price, 
                                  TransactionEntry.TransactionTime, TransactionEntry.Quantity, 
@@ -51,8 +54,7 @@ import.jh.detailed.sales <- function(){
                                  JOIN Cashier ON [Transaction].CashierID = Cashier.ID')
   joined.df
   }
-
-clean.jh.detailed.sales <- function(sql.df){
+  clean.jh.detailed.sales <- function(sql.df){
   library(dplyr)
   library(lubridate)
     
@@ -75,16 +77,13 @@ clean.jh.detailed.sales <- function(sql.df){
     sql.df$Categ.By.Year <- paste(sql.df$Category, sql.df$Year)
     sql.df
 }
-if(file.exists(paste0("data/sales.data.cache", Sys.Date(), ".csv"))){
-  data.clean <- read.csv(paste0("data/sales.data.cache", Sys.Date(), ".csv"), stringsAsFactor = FALSE)
-} else {
-con <- import.jh.sql.connect("Sam's Store")
+  con <- import.jh.sql.connect("Sam's Store")
 
-new.df <- import.jh.detailed.sales() # uses con but not as argument
+  new.df <- import.jh.detailed.sales() # uses con but not as argument
 
-data.clean <- clean.jh.detailed.sales(new.df)
+  data.clean <- clean.jh.detailed.sales(new.df)
 
-write.csv(data.clean, paste0("data/sales.data.cache", Sys.Date(), ".csv"), row.names = FALSE)
+  write.csv(data.clean, paste0("data/sales.data.cache", Sys.Date(), ".csv"), row.names = FALSE)
 }
 
 #####
