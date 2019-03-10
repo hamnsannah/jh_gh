@@ -1,3 +1,5 @@
+# not sure if going to use this function
+
 exploratory.bfc.jh.forecast <- function(ts.object, model.type, order.start.date, 
                                         order.end.date, out.stock.ok.perc){
   # need to figure out how best to subset time series by day.
