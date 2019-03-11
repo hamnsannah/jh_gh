@@ -8,7 +8,7 @@
 
 fit.bfc.jh <- function(ts.obj, model.to.use = "arima", surplus.interval = 80){
   model.options = c("arima", "ets", "stlf", "snaive", "rwf", "mean", "drift","snaive+6mo") # in advanced menu
-  
+  require(fpp2)
   if(model.to.use == "arima"){
     ts.fit <- auto.arima(ts.obj)
     fc <- forecast(ts.fit, h = frequency(ts.obj), level = surplus.interval)
@@ -38,6 +38,6 @@ fit.bfc.jh <- function(ts.obj, model.to.use = "arima", surplus.interval = 80){
     fc <- snaive(ts.grow, h = frequency(ts.obj), level = surplus.interval)
   }
 #fc <- forecast(ts.fit, h = frequency(ts.obj), level = c(80))
-  autoplot(ts.obj) + autolayer(fc)
+  #autoplot(ts.obj) + autolayer(fc)
   fc
 }
