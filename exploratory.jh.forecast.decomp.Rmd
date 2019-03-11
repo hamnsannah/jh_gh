@@ -119,13 +119,13 @@ exploratory.jh.time.series <- function(clean.df, freq = 365){
   sales.ts
 }
 #####
-data.clean <- filter(data.clean, Date.Sold <= date("2018-12-30")) # end of last full week of the year
+data.clean <- filter(data.clean, Date.Sold <= date("2018-12-30"), Department == "JEWELRY") # end of last full week of the year
 #####
 ```
 
 ## Time Series Visualizations
 ```{r autoplot, echo=FALSE}
-sales.ts <- exploratory.jh.time.series(data.clean, freq = 53)
+sales.ts <- exploratory.jh.time.series(data.clean, freq = 365)
 autoplot(sales.ts)
 
 ```
