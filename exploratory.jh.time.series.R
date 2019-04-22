@@ -19,17 +19,22 @@ exploratory.jh.time.series <- function(clean.df, freq = 365){
   }
   if(freq == 12){
     start.month <- month(head(clean.df$Month,1))
-    sales.agg <- aggregate(Total.Sales ~ Month + Year, clean.df, sum)
+    sales.agg <- aggregate(Total.Sales ~ Month + Year + Day, clean.df, sum)
     print(head(sales.agg, 25))
-    sales.agg.all <- left_join(sales.agg, data.frame(Month = 1:12))
+    first.of.month.seq <- seq.Date(from = as.Date(min(sales.agg$Day, na.rm = TRUE)), to = as.Date(max(sales.agg$Day, na.rm = TRUE)), by = "month")
+    first.of.month.df <- data.frame("Day" = first.of.month.seq, "Month" = month(first.of.month.seq), "Year" = year(first.of.month.seq))
+    sales.agg.all <- left_join(first.of.month.df, sales.agg)
     sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.month), frequency = 12)
   }
   if(freq == 53){
     clean.df$Week <- week(clean.df$Date.Sold)
     start.week <- head(clean.df$Week,1)
-    sales.agg <- aggregate(Total.Sales ~ Week + Year, clean.df, sum)
+    sales.agg <- aggregate(Total.Sales ~ Week + Year + Day, clean.df, sum)
     print(head(sales.agg, 25))
-    sales.agg.all <- left_join(sales.agg, data.frame(Week = 1:53))
+    first.of.week.seq <- seq.Date(from = as.Date(min(sales.agg$Day, na.rm = TRUE)), to = as.Date(max(sales.agg$Day, na.rm = TRUE)), by = "week")
+    first.of.week.df <- data.frame("Day" = first.of.week.seq, "Week" = week(first.of.week.seq), "Year" = year(first.of.week.seq))
+    sales.agg.all <- left_join(first.of.week.df, sales.agg)
+    #sales.agg.all <- left_join(sales.agg, data.frame(Week = 1:53))
     sales.ts <- ts(sales.agg.all$Total.Sales, start = c(start.year, start.week), frequency = 53)
     
     

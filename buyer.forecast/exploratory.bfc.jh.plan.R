@@ -1,3 +1,7 @@
+#next steps
+#- copy dynamic menus I used for k apps like pioneer generator
+#- install go button and make it interact properly
+
 
 # components of this web app
 # 1. visualization to show the forecast for the specified period
@@ -8,8 +12,8 @@
 
 # Structure?
 # First a plot showing forecast including some prior period, maybe all of it?
-# Second a table wit the same data but in tabular form
-# Third an inventory viualization perhaps with a slider where the implications for surplus and out of stock can be computed
+# Second a table with the same data but in tabular form
+# Third an inventory visualization perhaps with a slider where the implications for surplus and out of stock can be computed
 
 #Logic
 #1 import data as streamlined and aggregated as possible (maybe just aggregate identical products sold on same day)
@@ -19,3 +23,19 @@
 #5 plot the forecast with the safety rate and the mean.  This will include from h=1 to end of period requested
 #6 On a kable, provide mean & safety rate forecasts for requested dates.
 #6b Also list cost of surplus inventory and % of out of stock time
+
+#ui.R
+#need menus that interact
+#1 Supplier
+#2 Department (populates only the departments that supplier has products in, maybe?  I think this is necessary and helpful
+#3 Category (populates only the categories that Supplier & Department have)
+#4 Product (populates only what's included in what's selected above)
+
+#5 start date (when is current inventory is expected to run out?)
+#6 end date (how long does the inventory you're about to order need to last?)
+
+#7 select dollars or units
+
+#8 a Calculate Forecast button
+
+#9 advanced force a model selection (at the bottom of the main panel)
