@@ -39,3 +39,12 @@
 #8 a Calculate Forecast button
 
 #9 advanced force a model selection (at the bottom of the main panel)
+
+#process for data updates
+#need to generate updated product and supplier list for dynamic menu
+    #import most recent data set
+    #create a new column wt.data$Product <- paste(wt.data$Description, wt.data$Item)
+    #product.menu.df <- select(wt.data, Supplier, Product)
+    #product.menu.df <- unique(product.menu.df)
+    #product.menu.df <- arrange(product.menu.df, Product)
+    #write.csv(product.menu.df, "data/product.menu.df.csv", row.names = FALSE)
