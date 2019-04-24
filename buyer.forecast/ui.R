@@ -24,13 +24,14 @@ shinyUI(pageWithSidebar(
     
     dateInput('id5', 'Forecast Start Date'),
     dateInput('id6', 'Forecast End Date', value = today()+weeks(26)),
-    selectInput('id8', 'Select Dollars or Units', choices = c("Dollars", "Units"), selected = "Dollars")
-    
+    selectInput('id8', 'Select Dollars or Units', choices = c("Dollars", "Units"), selected = "Dollars"),
+    actionButton("go", "Calculate Forecast")
     #h5('This dashboard provides multiple views of the sales of the selected supplier.  
     #   It shows whether a supplier is outperforming or underperforming prior years and which categories and products are driving that trend.')
   ),
   mainPanel(
-    textOutput("output.text")
+    dataTableOutput("output.text"),
+    plotOutput("fc.plot")
   )
   )
 )
