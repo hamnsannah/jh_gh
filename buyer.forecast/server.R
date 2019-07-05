@@ -1,5 +1,8 @@
 library(shiny)
 library(data.table)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
 
 
 #need to switch to feather or heather for data loading per Joe Cheng
@@ -144,7 +147,7 @@ ts2df.bfc.jh <- function(fc.obj){
   df
 }
 
-plot.bfc.jh <- function(forecast.df){
+plot.bfc.jh <- function(forecast.df, include.year.historical = FALSE, histor.data){
   require(ggplot2)
   g <- ggplot(data = forecast.df, aes(x = date))+
     geom_line(aes(y = Hi.80), color = "blue", size = 2)+
@@ -152,6 +155,9 @@ plot.bfc.jh <- function(forecast.df){
     labs(y = "Sales of Selection", x = "Date")+
     scale_y_continuous(labels = scales::dollar)+
     theme_dark()
+  if(include.year.historical == TRUE){
+    g <- g + geom_line(data = histor.data, aes(y = Total.Sales, x = Date), color = "white", size = 2)
+  }
   g
 }
 
@@ -162,11 +168,15 @@ shinyServer(
     output$product.list <- renderUI({
       supplier.name <- input$id3
       
-      products.from.supplier <- c("ALL PRODUCTS", filter(product.menu.df, Supplier %in% supplier.name))
+      if(supplier.name=="ALL SUPPLIERS"){
+        products.from.supplier <- c("ALL PRODUCTS", product.menu.df$Product)
+      }else{
+        products.from.supplier <- c("ALL PRODUCTS", filter(product.menu.df, Supplier %in% supplier.name))
         #unique(narrow.df.for.menu[narrow.df.for.menu$Market %in% market2, 2])
-      #menu.facility.list <- menu.facility.list[order(menu.facility.list)]
-      print(head(products.from.supplier, 20))
-      selectInput('id4', 'Product', choices = products.from.supplier)
+        #menu.facility.list <- menu.facility.list[order(menu.facility.list)]
+      }
+        print(head(products.from.supplier, 20))
+        selectInput('id4', 'Product', choices = products.from.supplier)
     })
     all.rows <- 1:nrow(wt.data)
 
@@ -224,14 +234,29 @@ shinyServer(
         }
         })
       forecast.df <- reactive({
+        start.d <- input$id5
+        end.d <- input$id6
         ts.data.to.use <- ts.data()
         fc <- fit.bfc.jh(ts.data.to.use)
         fc.df <- ts2df.bfc.jh(fc)
+        fc.df <- filter(fc.df, date >= start.d, date <= end.d)
       })
       
       output$fc.plot <- renderPlot({
+        #need to aggregate differently and probably reorder the Date and Week.  Maybe Date then Week then Date again.
         forecast.df2 <- forecast.df()
-        plot.bfc.jh(forecast.df2)
+        f.data <- filtered.data()
+        f.data$Date <- date(f.data$Date.Sold)
+        latest.data <- max(unique(f.data$Date), na.rm = TRUE)
+        f.data.filt <- filter(f.data, Date > (latest.data -365))
+        f.data.filt$Week <- week(f.data.filt$Date.Sold)
+        f.data.agg <- aggregate(Total.Sales ~ Date + Week, f.data.filt, sum)
+        #print(head(f.data, 3))
+        #print(str(f.data))
+        #print(max(unique(f.data$Date), na.rm = TRUE))
+        
+        plot.bfc.jh(forecast.df2, histor.data = f.data.agg, include.year.historical = TRUE)
+        
       })
         
       #})
